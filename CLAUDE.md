@@ -112,9 +112,52 @@ the Critic loop, cache key normalization, all agent prompts.
 If I ask you to explain rather than implement, explain — don't write the code.
 Before generating anything non-obvious, say what approach you're taking and why.
 
+### How I like to work with you
+
+- I type, click, and run everything myself by default — Maven fields, docker-compose
+  content, git commands, all of it. Guide me step by step and explain what/how/why
+  before I do each thing, don't just do it for me.
+- Exceptions are one-off and explicit only (e.g. I once asked you to `brew install`
+  Java and edit `~/.zshrc` directly — that doesn't carry forward to anything else).
+- When I say "check and fix it" (e.g. YAML indentation, a broken pom) — that's
+  explicit permission for that specific fix. Go ahead and edit directly, then
+  explain what was wrong and what changed. Don't ask again for the same class of
+  fix within the same session.
+- I'm a backend Java/Spring dev (~4.5 yrs) but new to Docker/docker-compose,
+  multi-module Maven, and agentic systems — explain infra concepts from first
+  principles (ELI5 is fine, even preferred) rather than assuming I know the jargon.
+- Give me honest progress checks against `docs/PLAN.md` when I ask "are we
+  lagging" — a real status table, not reassurance.
+- Some modules I want to build entirely solo once I've learned the pattern once
+  (e.g. I built `retrieval-service` with your guidance, then asked to do
+  `agent-service` on my own) — respect that without re-offering to do it for me.
+
 ---
 
 ## Definition of done for a session
 
 `docker compose up` is green, the module compiles, the test passes, and I can
 explain every line that was added. Commit at each working step.
+
+---
+
+## Session Log
+
+### Session 1 (2026-08-09) — Maven skeleton + docker-compose
+**Done:**
+- Root `pom.xml` (aggregator, packaging=pom), groupId `com.comeback.researchplatform`
+- `common` module wired (plain jar, no Spring Boot plugin)
+- `retrieval-service` module created via IntelliJ Spring Initializr — Spring Boot **4.1.0** GA (watch out: wizard defaulted to `4.1.1-SNAPSHOT`, had to correct)
+- Root pom now has `<dependencyManagement>` importing `spring-boot-dependencies:4.1.0` BOM + `<pluginManagement>` pinning `spring-boot-maven-plugin:4.1.0` — modules inherit versions from root, not from `spring-boot-starter-parent` directly
+- `docker-compose.yml`: postgres (`pgvector/pgvector:pg16`), redis, redpanda (`v25.3.1`, dual internal/external listener), searxng — all 4 healthy
+- `searxng/settings.yml`: added `search.formats: [html, json]` — confirmed working via curl
+- `mvn clean install` passes, exit 0
+- GitHub remote connected: `github.com/avnishab20-agentic/research-platform`, pushed
+
+**Not done yet (rest of Session 1 per PLAN.md):**
+- `agent-service`, `control-plane` modules
+- Flyway baseline (`runs`, `dag_nodes`, `dag_levels` — DAG columns intentionally unused, flat fan-out only)
+- Kafka topics (`research.subtasks`, `research.findings`, `agent.events`)
+- `/actuator/health` check across all 3 apps
+
+**Next session starts with:** creating `agent-service` module (user doing this one solo — knows the pattern now: Maven/Java21/Boot 4.1.0 explicit, watch for double-nested folder, fix `<parent>` to point at root pom, add to root `<modules>`).
