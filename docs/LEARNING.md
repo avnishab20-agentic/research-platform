@@ -191,3 +191,75 @@ Flyway runs on startup and takes a lock, so concurrent starts are safe. The real
 rule: migrations must be backward-compatible with the *previous* image, or a
 rollback breaks against the new schema. Additive changes; never drop a column in
 the same release that stops using it.
+
+---
+
+## Security
+
+### Where auth lives, and where it doesn't
+**Built in:** `control-plane`, week 5
+
+> "How did you secure communication between your microservices?"
+
+The honest and correct answer: **I didn't expose them.** `control-plane` is the
+only service with an ingress and it validates JWTs as an OAuth2 resource server.
+`retrieval-service` and `agent-service` are ClusterIP-only — unreachable from
+outside the cluster. They need network isolation, not authentication.
+
+mTLS between three services on a single node is theatre. Knowing when *not* to
+add a security layer is the more senior answer.
+
+**Follow-up:** "What if an attacker gets inside the cluster?" — then you've lost
+already at this scale; defense would be network policies, and that's worth doing
+at a size where the blast radius justifies it.
+
+### JWT as more than auth
+The `sub` claim keys the per-user daily run cap. One credential, two jobs:
+identity and quota attribution. Worth mentioning unprompted — it shows you
+thought about cost, not just access.
+
+### OAuth2 client vs authorization server
+> "You said you used OAuth2 — which part?"
+
+Client. Google issues the token, we validate it, we never store a password.
+Building an authorization *server* (Spring Authorization Server) is an entirely
+different scale of project. Know which side of that line you're on — candidates
+routinely say "I implemented OAuth2" meaning they added a login button.
+
+---
+
+## Architecture decisions you'll be challenged on
+
+### Shared `common` module vs schema-first
+> "A shared library across microservices — isn't that coupling?"
+
+Yes, deliberately. Spring AI binds LLM output directly to these records, so a
+mismatch between what the writer emits and what the critic expects becomes a
+**compile error** instead of a 2am runtime failure.
+
+The purist alternative — each service owns its types, contract lives on the wire
+as JSON Schema or Protobuf — is correct once independent teams ship on
+independent schedules and a shared jar would force lockstep releases. One team,
+one release cadence: the coupling costs nothing and buys compiler-checked
+contracts.
+
+**The answer that lands: "right call for one team's release cadence, wrong call
+the moment there are two."** Knowing the trade-off beats knowing the rule.
+
+### Monorepo vs polyrepo
+Polyrepo solves *team* decoupling. One person writing both ends of every
+contract has no team to decouple from — it would just mean four clones, four CI
+setups, and version-bumping a shared jar by hand.
+
+### Why no Eureka
+Kubernetes provides service discovery natively (Services + cluster DNS); Compose
+resolves by service name. Eureka on k8s duplicates a platform feature and is a
+recognized anti-pattern. Also relevant: Spring Cloud Netflix's Ribbon, Hystrix
+and Zuul are in maintenance mode, superseded by Spring Cloud LoadBalancer,
+Resilience4j and Spring Cloud Gateway.
+
+### Why KEDA on only one service
+`agent-service` is genuinely bursty — idle, then N researchers, then idle — and
+scales on Kafka consumer lag. `retrieval-service` and `control-plane` get fixed
+replicas because their load is steady. Autoscaling everything is cargo culting;
+being able to say *why* one service and not three is the point.

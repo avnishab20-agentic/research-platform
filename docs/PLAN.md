@@ -215,3 +215,100 @@ Not the architecture diagram.
 Start a run → kill the `agent-service` container after 90s → restart it →
 run completes correctly from committed offsets + Postgres DAG state.
 30 seconds, and no in-process orchestration framework can do it.
+
+---
+
+## Week 5 — Kubernetes + KEDA (explicit addition, not part of the core 4 weeks)
+
+Goal: real pod deployment, KEDA-driven autoscaling on `agent-service`, and a
+public URL so friends can use it. ~15-20 hrs of genuinely new work — treat this
+as its own week, don't try to absorb it into week 4.
+
+**Prerequisite:** weeks 1-4 complete and working locally first. Don't containerize
+onto k8s something that isn't already correct on Compose.
+
+### Build order
+
+1. **VM: bump to 8GB** (~€8-10/mo). k3s control plane + the full stack needs
+   more headroom than Compose alone.
+2. **Install k3s** on the VM. Keep its built-in Traefik as ingress — don't add
+   a second ingress controller.
+3. **Install KEDA** via Helm (`helm install keda kedacore/keda`). Not built into
+   k3s, a separate add-on.
+4. **Postgres, Redpanda, Redis stay as plain Docker on the VM host — NOT in k3s.**
+   StatefulSets/PVCs on a single node are pure cost, no benefit at this scale.
+   The 3 Java services run as pods and reach these over the VM's local network.
+5. **Deployment + Service manifests** for `retrieval-service`, `agent-service`,
+   `control-plane`. Secrets (DB password, DeepSeek API key) via `kubectl create
+   secret`, referenced by each Deployment. Plain YAML is fine — skip Helm for
+   your own services unless it starts feeling repetitive.
+6. **KEDA ScaledObject on `agent-service` only** — scales on consumer lag for
+   `research.subtasks`. This is the one service where autoscaling is actually
+   justified (bursty: idle, then N researchers, then idle). `retrieval-service`
+   and `control-plane` get fixed replica counts (2 each) — don't KEDA everything,
+   that's cargo culting, not architecture.
+7. **Ingress + public URL.** Cheapest path: nip.io gives a free working hostname
+   off the VM's IP (`http://<vm-ip>.nip.io`), enough for cert-manager to issue
+   real Let's Encrypt HTTPS. A real domain (~₹800/yr) if you want something
+   shareable that isn't a raw IP.
+8. **Rewrite `deploy.yml`**: SSH+Compose → `kubectl apply` / `helm upgrade`.
+   Register a **self-hosted GitHub Actions runner on the VM itself** so the
+   deploy job talks to the cluster over localhost — never expose the k8s API
+   (6443) to the internet. Firewall stays 22/80/443 only, same as before.
+
+9. **Spring Security + JWT — `control-plane` ONLY.** (~8 hrs)
+   `control-plane` is the only service with an ingress, so it's the only one
+   that needs auth. Configure it as an OAuth2 resource server validating JWTs.
+   `retrieval-service` and `agent-service` stay ClusterIP with **no ingress** —
+   unreachable from the internet, so they need network isolation, not auth.
+   mTLS between three services on one node is theatre; don't build it.
+
+   The JWT `sub` claim doubles as the key for the per-user daily run cap
+   (see Rate limiting below). One mechanism, two purposes.
+
+10. **Rate limiting — 3 layers, 3 different threats.** (~4 hrs)
+    - **Traefik `RateLimit` middleware** on the ingress (`average: 10,
+      burst: 20` per IP). Stops raw flooding before it reaches any JVM.
+      ~10 lines of YAML, zero app code.
+    - **Per-domain token bucket** in `retrieval-service` — already built in
+      week 1. Protects search quota.
+    - **Per-user daily run cap** in `control-plane` — the one that actually
+      matters, because the expensive unit is a *run* (~$0.04 of LLM + search),
+      not an HTTP request. Same Redis Lua atomicity pattern as week 1:
+      ```
+      INCR runs:daily:{sub}
+      EXPIRE to next midnight on first increment
+      if count > 10: reject, "daily limit reached"
+      ```
+
+    This is a genuinely good interview answer: "the same rate-limiting
+    primitive at three layers for three different threats — request flooding,
+    search quota, and LLM cost."
+
+11. **OAuth2 Google login — STRETCH, only if 1-10 went smoothly.** (~8 hrs)
+    `spring-boot-starter-oauth2-client` with Google as the provider. Means you
+    never handle or store passwords for your friends — Google issues the token,
+    `control-plane` validates it. Skip if week 5 is running long; the JWT layer
+    above already secures the deployment.
+
+    Do NOT build an authorization server (Spring Authorization Server). Being
+    an OAuth2 *client* is an afternoon; being a *provider* is a different
+    project entirely.
+
+### Explicitly NOT doing: Eureka / service discovery
+Kubernetes has service discovery built in (Services + cluster DNS), and Compose
+resolves by service name. Running Eureka on k8s duplicates a platform feature
+and is a known anti-pattern. It would also add a 4th deployable to an 8GB VM.
+
+Note that much of Spring Cloud Netflix (Ribbon, Hystrix, Zuul) is in maintenance
+mode, superseded by Spring Cloud LoadBalancer, Resilience4j, and Spring Cloud
+Gateway. "We used Kubernetes-native service discovery because the platform
+provides it" is a stronger answer than having wired up Eureka.
+
+### The demo that proves it (record this)
+Push a change → CI runs → merge → `publish.yml` builds and pushes the image →
+trigger `deploy.yml` → hit the public URL, see the new version live. Then fire
+several research requests at once and run `kubectl get pods -w` while
+`agent-service` scales up under load and back down after. That live scaling
+moment is the actual payoff — it's what makes "I used KEDA" a real answer in
+an interview instead of a buzzword on a resume.

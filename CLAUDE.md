@@ -161,3 +161,23 @@ explain every line that was added. Commit at each working step.
 - `/actuator/health` check across all 3 apps
 
 **Next session starts with:** creating `agent-service` module (user doing this one solo — knows the pattern now: Maven/Java21/Boot 4.1.0 explicit, watch for double-nested folder, fix `<parent>` to point at root pom, add to root `<modules>`).
+
+### Session 2 (2026-08-10) — agent-service + control-plane skeletons, docs cleanup
+**Done:**
+- `agent-service` module created (mostly solo) — same `<parent>` bug as before (wizard pointed at `spring-boot-starter-parent` instead of root pom), fixed
+- `control-plane` module created (mostly solo) — wizard only offered `spring-boot-starter-webflux`; discussed SSE via WebFlux vs classic `webmvc`/`SseEmitter` tradeoff, decided **`webmvc`** for consistency with the other two services (no reactive paradigm needed for one plain SSE page)
+- `control-plane` registered in root `pom.xml`'s `<modules>` list
+- `control-plane/pom.xml` fixed twice: `<parent>` pointed at wrong target, then a pasted stray `>` (`</dependency>>`) broke the XML parse — both resolved
+- `control-plane` pom gained `spring-boot-starter-data-jpa`, `flyway-core`, `flyway-database-postgresql`, `postgresql` (runtime) — this is the module that will own Postgres for fan-in state
+- `LEARNING.md`/`PLAN.md` duplication resolved: root copies had newer content (Security + Architecture-decisions sections in LEARNING.md; Week 5 K8s+KEDA section in PLAN.md), merged into `docs/` copies, root duplicates deleted — `docs/` is now the single source of truth
+- Added a layman-friendly `README.md` to all 4 modules (`common`, `retrieval-service`, `agent-service`, `control-plane`) — what/how/why/why-only-this for each, honest "skeleton only" status
+- Diagnosed a `control-plane` build failure: NOT a pom problem — adding JPA/Postgres deps means `ControlPlaneApplicationTests.contextLoads` now boots a real `DataSource` bean, and `application.properties` has no `spring.datasource.*` yet → `Failed to determine a suitable driver class`. Expected next step, not a bug.
+
+**Not done yet:**
+- `spring.datasource.*` + `spring.jpa.hibernate.ddl-auto=validate` in `control-plane/application.properties` (values come from `docker-compose.yml`'s postgres service)
+- Flyway migration SQL for `runs`, `dag_nodes`, `dag_levels` (Claude's task per the working agreement, queued once datasource config is in)
+- Kafka topics (`research.subtasks`, `research.findings`, `agent.events`)
+- `/actuator/health` check across all 3 apps
+- `retrieval-service` package typo (`com.comback` → `com.comeback`) still unfixed, left as user's call
+
+**Next session starts with:** adding `spring.datasource.*` to `control-plane/application.properties`, bringing docker-compose back up (`docker compose up -d`, user shut all 4 containers down at end of this session), then re-running `mvn -pl control-plane -am test` to confirm it goes green before writing the Flyway migrations.

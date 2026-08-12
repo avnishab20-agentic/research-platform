@@ -11,6 +11,8 @@
     <modules>
         <module>common</module>
         <module>retrieval-service</module>
+        <module>agent-service</module>
+        <module>control-plane</module>
     </modules>
 
     <properties>
