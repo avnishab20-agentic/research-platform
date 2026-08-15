@@ -1,0 +1,933 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2907
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 HelveticaNeue-Bold;\f1\fnil\fcharset0 HelveticaNeue;\f2\fnil\fcharset0 HelveticaNeue-Italic;
+\f3\fnil\fcharset0 .SFNS-Regular_wdth_opsz110000_GRAD_wght2580000;\f4\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red14\green46\blue75;\red59\green67\blue80;\red88\green94\blue109;
+\red24\green30\blue42;\red235\green243\blue255;\red29\green72\blue230;\red22\green52\blue207;\red211\green228\blue254;
+\red178\green210\blue254;\red240\green241\blue244;\red223\green225\blue230;\red14\green18\blue29;\red21\green84\blue39;
+\red134\green36\blue16;\red255\green245\blue233;}
+{\*\expandedcolortbl;;\cssrgb\c5882\c23922\c36863;\cssrgb\c29412\c33333\c38824;\cssrgb\c41961\c44706\c50196;
+\cssrgb\c12157\c16078\c21569;\cssrgb\c93725\c96471\c100000;\cssrgb\c14510\c38824\c92157;\cssrgb\c11373\c30588\c84706;\cssrgb\c85882\c91765\c99608;
+\cssrgb\c74902\c85882\c99608;\cssrgb\c95294\c95686\c96471;\cssrgb\c89804\c90588\c92157;\cssrgb\c6667\c9412\c15294;\cssrgb\c8627\c39608\c20392;
+\cssrgb\c60392\c20392\c7059;\cssrgb\c100000\c96863\c92941;}
+{\*\listtable{\list\listtemplateid1\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}}{\leveltext\leveltemplateid1\'01\'00;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listname ;}\listid1}
+{\list\listtemplateid2\listhybrid{\listlevel\levelnfc0\levelnfcn0\leveljc0\leveljcn0\levelfollow0\levelstartat1\levelspace360\levelindent0{\*\levelmarker \{decimal\}}{\leveltext\leveltemplateid101\'01\'00;}{\levelnumbers\'01;}\fi-360\li720\lin720 }{\listname ;}\listid2}
+{\list\listtemplateid3\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid201\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid3}
+{\list\listtemplateid4\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid301\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid4}
+{\list\listtemplateid5\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid401\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid5}
+{\list\listtemplateid6\listhybrid{\listlevel\levelnfc23\levelnfcn23\leveljc0\leveljcn0\levelfollow0\levelstartat0\levelspace360\levelindent0{\*\levelmarker \{disc\}}{\leveltext\leveltemplateid501\'01\uc0\u8226 ;}{\levelnumbers;}\fi-360\li720\lin720 }{\listname ;}\listid6}}
+{\*\listoverridetable{\listoverride\listid1\listoverridecount0\ls1}{\listoverride\listid2\listoverridecount0\ls2}{\listoverride\listid3\listoverridecount0\ls3}{\listoverride\listid4\listoverridecount0\ls4}{\listoverride\listid5\listoverridecount0\ls5}{\listoverride\listid6\listoverridecount0\ls6}}
+\deftab720
+\pard\pardeftab720\sa80\partightenfactor0
+
+\f0\b\fs66\fsmilli33333 \cf2 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 Research Platform\
+\pard\pardeftab720\sa320\partightenfactor0
+
+\f1\b0\fs32 \cf3 \strokec3 A beginner-friendly explanation of the system, why it exists, and its live build status\
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs24 \cf4 \strokec4 Generated from the repository documentation and live workspace on 16 August 2026.\
+\pard\pardeftab720\partightenfactor0
+
+\f0\b\fs28 \cf5 \cb6 \strokec5 One-sentence summary:
+\f1\b0  this project will take one big research question, split it into smaller questions, research those pieces in parallel, assemble a report, and then verify every factual claim against the source that supposedly supports it.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \cb1 \strokec2 1. The problem this project solves\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 Imagine asking: 
+\f2\i \'93Should India invest more in renewable energy?\'94
+\f1\i0  A normal chatbot may write a convincing answer, but it can invent figures, mix up sources, or attach a citation that does not actually support the sentence next to it.\
+This platform treats research as a workflow rather than one giant AI prompt:\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls1\ilvl0\cf5 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	1	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Break the broad question into smaller, independent sub-questions.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	2	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Search trusted sources and collect clean text.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	3	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Let several researcher workers work in parallel.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	4	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Build a report from structured claims instead of untraceable prose.\
+\ls1\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	5	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Send every factual claim back through a critic that checks its original source and stores the supporting passage.\
+\pard\pardeftab720\sa280\partightenfactor0
+\cf5 The last step is the special part. A report is not considered trustworthy merely because it has footnotes. Each factual statement must be checkable against specific evidence.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 2. The intended architecture\
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\fs28 \cf5 \cb6 \strokec5 Browser\cb1 \
+\cb6 asks a question\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 control-plane\cb1 \
+\cb6 plans & coordinates\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 Redpanda / Kafka\cb1 \
+\cb6 durable work messages\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 agent-service\cb1 \
+\cb6 researcher / writer / critic\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 retrieval-service\cb1 \
+\cb6 search, fetch, cache, rate-limit\
+retrieval-service\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 SearXNG\cb1 \
+\cb6 web search\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 extractor sidecar\cb1 \
+\cb6 clean article text\
+control-plane\cb1 \
+\cb6 run state / fan-in\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 Postgres + pgvector\
+retrieval cache / locks / limits\
+\pard\pardeftab720\partightenfactor0
+
+\f1\b0\fs45\fsmilli22667 \cf7 \cb1 \strokec7 \uc0\u8594 \
+\pard\pardeftab720\qc\partightenfactor0
+
+\f3\b\fs28 \cf5 \cb6 \strokec5 Redis\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\f0\fs32\fsmilli16380 \cf8 \cb1 \strokec8 Why three services?\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth1585\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clcbpat9 \clwWidth6317\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clcbpat9 \clwWidth5427\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clcbpat9 \clwWidth1130\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs28 \cf2 \strokec2 Part\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Plain-English job\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Why it is separate\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Port\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1585\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth6317\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth5427\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth1130\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\b0\fs25\fsmilli12667 \cf5 \cb11 \strokec5 retrieval-service
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The system\'92s librarian and courier: searches, fetches pages, cleans content, caches answers, and protects external websites/search budgets.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 It is the single \'93quota boundary.\'94 No AI worker gets to call a search engine directly.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 8081\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1585\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth6317\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth5427\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth1130\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 agent-service
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The AI workforce: researchers investigate, writers assemble reports, critics verify claims.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The AI roles share the same operational needs, so they are Spring profiles in one app rather than three extra deployments.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 8082\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1585\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth6317\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth5427\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth1130\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 control-plane
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The front desk and coordinator: receives the question, plans work, sends tasks out, waits for results, and streams progress to the browser.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Only this service should be externally reachable in the future.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 8083\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1585\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth6317\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth5427\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth1130\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 common
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A small shared Java library for common data records such as future claims and findings.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 It contains data shapes only\'97no Spring app, database, Kafka client, or business logic.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Not runnable\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 3. Key technology choices, explained simply\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clcbpat9 \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clcbpat9 \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs28 \cf2 Tool\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 What it is\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Why this project uses it\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f1\b0 \cf5 \strokec5 Java 21 + Spring Boot\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The main backend language and web framework.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Matches the author\'92s Java/Spring background while adding modern Java features such as records and virtual threads.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Maven multi-module build\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 One parent project that builds several related modules together.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Lets all services share dependency versions and compile as one coherent project while remaining separately runnable.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Docker Compose\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A local \'93start the whole supporting stack\'94 file.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Starts Postgres, Redis, Redpanda, and SearXNG together without installing each one manually.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Postgres + pgvector\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A reliable relational database; pgvector later adds vector similarity search.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Holds durable research-run state. A restart does not forget how much work is finished.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Redis\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Very fast in-memory key/value storage.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Will hold disposable shared state: cached searches, rate-limit counters, and short-lived locks.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Redpanda\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A Kafka-compatible event broker.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Moves long-running research tasks durably between services. If a worker restarts, work is not lost.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 SearXNG\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A self-hosted search aggregator.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Queries multiple search engines and returns one JSON response, avoiding a separate paid API integration for each provider.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth1623\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth4882\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Flyway\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A database change-history tool.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Applies numbered SQL migrations in order. The schema is explicit, reviewable SQL\'97not Hibernate guessing at tables.\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 4. How a completed research run will work\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls2\ilvl0
+\fs28 \cf5 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	1	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Question arrives:
+\f1\b0  the browser sends one broad question to 
+\f4\fs25\fsmilli12667 \cb11 control-plane
+\f1\fs28 \cb1 .\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	2	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Planning:
+\f1\b0  an AI planner turns it into roughly 6\'968 flat sub-questions. \'93Flat\'94 means none depends on another this month, so all can start immediately.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	3	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Fan-out:
+\f1\b0  
+\f4\fs25\fsmilli12667 \cb11 control-plane
+\f1\fs28 \cb1  publishes the sub-tasks to 
+\f4\fs25\fsmilli12667 \cb11 research.subtasks
+\f1\fs28 \cb1  in Redpanda/Kafka.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	4	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Research:
+\f1\b0  researcher workers ask 
+\f4\fs25\fsmilli12667 \cb11 retrieval-service
+\f1\fs28 \cb1  to search and fetch sources. They do not bypass it.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	5	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Fan-in:
+\f1\b0  every completed sub-task atomically increments a Postgres counter. Exactly one worker observes \'93all expected tasks are done\'94 and triggers the writer.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	6	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Writing:
+\f1\b0  the writer creates structured claims. A claim has text plus one source ID, rather than loose prose with vaguely related footnotes.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	7	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Verification:
+\f1\b0  the critic re-fetches the cited source, finds the best evidence passage, and marks a claim supported, partial, unsupported, contradicted, or unreachable.\
+\ls2\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	8	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Presentation:
+\f1\b0  the browser receives live progress through SSE and eventually sees a report with visible verification badges.\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\f0\b\fs32\fsmilli16380 \cf8 \strokec8 The fan-in decision: why Postgres instead of a Java counter?\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 An in-memory 
+\f4\fs25\fsmilli12667 \cb11 AtomicInteger
+\f1\fs28 \cb1  is like a tally counter kept in one person\'92s pocket. If that person restarts, it is gone. If two copies of the service run, each copy has a different tally. Instead, Postgres owns the tally:\
+\pard\pardeftab720\partightenfactor0
+
+\f4\fs23\fsmilli11733 \cf12 \cb13 \strokec12 UPDATE dag_levels\
+SET completed = completed + 1\
+WHERE run_id = ? AND level = 0\
+RETURNING completed, expected;\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\fs28 \cf5 \cb1 \strokec5 The database makes the increment atomic. One and only one completion sees the final count. Because it is in Postgres, the count survives an application restart.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 5. What is deliberately not being built\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 Good scope is a feature. The project intentionally postpones or excludes:\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls3\ilvl0\cf5 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 DAG dependencies between sub-questions. The database reserves fields for them, but every current task stays at level 0.\
+\ls3\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Contradiction reconciliation, multi-provider search routing, rich UI, multi-user billing, and early CI/CD/VM deployment.\
+\ls3\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Kubernetes, service mesh, API gateway, Terraform, and extra services during the core month.\
+\pard\pardeftab720\sa280\partightenfactor0
+\cf5 A separate optional Week 5 later introduces k3s, KEDA autoscaling for the bursty agent service, ingress, and JWT protection\'97but only after the local version works.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 6. Learning value and interview stories\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 This is intentionally a learning project, not just an app. Each hand-built piece gives a concrete answer to an interview question.\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clcbpat9 \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf2 \strokec2 Topic\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Practical story this project will provide\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f1\b0 \cf5 \strokec5 Cache-aside\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Check Redis \uc0\u8594  on a miss call the external system \u8594  store JSON with a TTL. Redis being down makes requests slower, not incorrect.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Redis Lua token bucket\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A per-domain rate limiter must read and update atomically. A Lua script avoids two requests both passing a check-then-act race.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Cache stampede protection\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 When many agents miss the same cache key, one wins a short Redis lock while others wait and reread. This is the \'93thundering herd\'94 problem.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Parallel Java I/O\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 CompletableFuture
+\f1\fs28 \cb1  plus an explicit/virtual-thread executor fetches independent URLs in parallel without letting one dead URL sink the batch.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Distributed coordination\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Postgres 
+\f4\fs25\fsmilli12667 \cb11 UPDATE ... RETURNING
+\f1\fs28 \cb1 , not a 
+\f4\fs25\fsmilli12667 \cb11 ConcurrentHashMap
+\f1\fs28 \cb1 , coordinates completion across restarts and replicas.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2854\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12205\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Verification/evaluation\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Deliberately corrupt claims and measure whether the critic catches them. This demonstrates AI reliability rather than merely generating prose.\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 7. What is built right now\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 The following is based on the live workspace inspected for this guide.\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clcbpat9 \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf2 \strokec2 Area\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Current state\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f1\b0 \cf5 \strokec5 Project skeleton\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Built.
+\f1\b0 \cf5 \strokec5  Root Maven aggregator contains 
+\f4\fs25\fsmilli12667 \cb11 common
+\f1\fs28 \cb1 , 
+\f4\fs25\fsmilli12667 \cb11 retrieval-service
+\f1\fs28 \cb1 , 
+\f4\fs25\fsmilli12667 \cb11 agent-service
+\f1\fs28 \cb1 , and 
+\f4\fs25\fsmilli12667 \cb11 control-plane
+\f1\fs28 \cb1 .\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Local infrastructure\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Built.
+\f1\b0 \cf5 \strokec5  Compose defines Postgres/pgvector, Redis, Redpanda, and SearXNG. SearXNG JSON output was enabled.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Database baseline\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Built.
+\f1\b0 \cf5 \strokec5  Flyway migration creates 
+\f4\fs25\fsmilli12667 \cb11 runs
+\f1\fs28 \cb1 , 
+\f4\fs25\fsmilli12667 \cb11 dag_nodes
+\f1\fs28 \cb1 , and 
+\f4\fs25\fsmilli12667 \cb11 dag_levels
+\f1\fs28 \cb1 ; Flyway also creates its own history table.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Kafka topics\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Created locally.
+\f1\b0 \cf5 \strokec5  
+\f4\fs25\fsmilli12667 \cb11 research.subtasks
+\f1\fs28 \cb1  has 12 partitions, 
+\f4\fs25\fsmilli12667 \cb11 research.findings
+\f1\fs28 \cb1  has 6, and 
+\f4\fs25\fsmilli12667 \cb11 agent.events
+\f1\fs28 \cb1  has 3.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Service health\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Verified.
+\f1\b0 \cf5 \strokec5  Apps are configured for 8081/8082/8083 and Actuator health checks have been verified.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 retrieval API contract\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Built as stubs.
+\f1\b0 \cf5 \strokec5  Java records define search/extract/quota payloads. The controller exposes all three planned endpoints and currently returns placeholders.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Source tiering\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf14 \strokec14 Partially built and tested.
+\f1\b0 \cf5 \strokec5  YAML lists tier-1/2 domains and tier-4 patterns. 
+\f4\fs25\fsmilli12667 \cb11 SourceTierResolver
+\f1\fs28 \cb1  maps URL hosts to a tier and has five focused unit tests. It is not connected to live SearXNG result mapping yet.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Real SearXNG call\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf15 \strokec15 Not built.
+\f1\b0 \cf5 \strokec5  
+\f4\fs25\fsmilli12667 \cb11 POST /api/v1/search
+\f1\fs28 \cb1  still returns an empty list; the next implementation step is a 
+\f4\fs25\fsmilli12667 \cb11 RestClient
+\f1\fs28 \cb1 -based SearXNG client.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Extractor sidecar\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf15 \strokec15 Not built.
+\f1\b0 \cf5 \strokec5  The extract endpoint is intentionally a stub until the Python/trafilatura sidecar exists.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2254\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth12805\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Agents, orchestration, SSE, verification\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf15 \strokec15 Not built.
+\f1\b0 \cf5 \strokec5  These start in later weeks once retrieval is real.\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 8. The database tables that already exist\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth3323\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clcbpat9 \clwWidth2527\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clcbpat9 \clwWidth8910\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs28 \cf2 Table\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Purpose\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Important constraints\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth3323\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth2527\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8910\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\b0\fs25\fsmilli12667 \cf5 \cb11 \strokec5 runs
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 One record for each top-level research question.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 id
+\f1\fs28 \cb1  is a UUID primary key; question/status/timestamps cannot be null; report is optional until writing finishes.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth3323\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth2527\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8910\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 dag_nodes
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 One record for each sub-question/research task.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 run_id
+\f1\fs28 \cb1  is a required foreign key to 
+\f4\fs25\fsmilli12667 \cb11 runs
+\f1\fs28 \cb1 ; 
+\f4\fs25\fsmilli12667 \cb11 depends_on
+\f1\fs28 \cb1  is a nullable self-reference reserved for later; 
+\f4\fs25\fsmilli12667 \cb11 level
+\f1\fs28 \cb1  defaults to 0.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth3323\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth2527\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8910\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 dag_levels
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 The durable completion counter for a run level.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Composite primary key 
+\f4\fs25\fsmilli12667 \cb11 (run_id, level)
+\f1\fs28 \cb1  guarantees one counter per level per run; 
+\f4\fs25\fsmilli12667 \cb11 expected
+\f1\fs28 \cb1 , 
+\f4\fs25\fsmilli12667 \cb11 completed
+\f1\fs28 \cb1 , and 
+\f4\fs25\fsmilli12667 \cb11 deadline
+\f1\fs28 \cb1  make fan-in/release decisions possible.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth3323\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2880
+\clvertalt \clshdrawnil \clwWidth2527\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx5760
+\clvertalt \clshdrawnil \clwWidth8910\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 flyway_schema_history
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Flyway\'92s own bookkeeping table.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Records that version 1 ran, so it will never run the same migration twice.\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 9. The retrieval service, in detail\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 This is the active area of development. It owns all outbound web access, because allowing each AI worker to make its own searches would make budget, caching, and politeness impossible to control centrally.\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth2347\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clcbpat9 \clwWidth2992\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clcbpat9 \clwWidth3053\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clcbpat9 \clwWidth6066\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f0\b \cf2 \strokec2 Endpoint\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Input\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Current result\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Eventually\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2347\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth2992\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth3053\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth6066\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\b0\fs25\fsmilli12667 \cf5 \cb11 \strokec5 POST /api/v1/search
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A list of queries, result limit, freshness, and minimum tier.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Returns empty results, zero spent credits, zero cache hits.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Call SearXNG, map its JSON into internal results, assign source tiers, normalize/cache requests, and limit results.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2347\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth2992\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth3053\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth6066\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 POST /api/v1/extract
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 A list of URLs.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Returns empty documents.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Call the Python extractor; return clean text, tier, and a status such as OK or UNREACHABLE.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth2347\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx2160
+\clvertalt \clshdrawnil \clwWidth2992\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth3053\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx6480
+\clvertalt \clshdrawnil \clwWidth6066\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f4\fs25\fsmilli12667 \cf5 \cb11 GET /api/v1/quota
+\f1\fs28 \cb1 \cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 No input.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Returns placeholder 
+\f4\fs25\fsmilli12667 \cb11 creditsRemaining: 1000
+\f1\fs28 \cb1 .\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Return the project\'92s actual self-imposed budget/use information.\cell \lastrow\row
+\pard\pardeftab720\sa280\partightenfactor0
+\cf5 The API uses Java 
+\f0\b records
+\f1\b0 , a concise immutable data-carrier form. For example, 
+\f4\fs25\fsmilli12667 \cb11 SearchResult(url, title, snippet, tier)
+\f1\fs28 \cb1  automatically has fields, a constructor, read accessors, equality, and a useful 
+\f4\fs25\fsmilli12667 \cb11 toString
+\f1\fs28 \cb1 \'97without Lombok or handwritten boilerplate.\
+\pard\pardeftab720\sa120\partightenfactor0
+
+\f0\b\fs32\fsmilli16380 \cf8 \strokec8 Source quality tiers\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 The current YAML configuration classifies sources before agents use them:\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls4\ilvl0
+\f0\b \cf5 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Tier 1:
+\f1\b0  exact primary/official sources currently including PIB, RBI, and ISRO.\
+\ls4\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Tier 2:
+\f1\b0  exact reputable journalism domains currently including The Hindu, Indian Express, and NDTV.\
+\ls4\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Tier 3:
+\f1\b0  the safe default for any unknown domain.\
+\ls4\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Tier 4:
+\f1\b0  pattern-matched low-confidence sources, currently Blogspot and WordPress-hosted blogs.\
+\pard\pardeftab720\sa280\partightenfactor0
+\cf5 The resolver strips 
+\f4\fs25\fsmilli12667 \cb11 www.
+\f1\fs28 \cb1 , lowercases a URL\'92s host, checks the exact lists, then checks the glob patterns. Its tests cover a tier-1 domain, a tier-2 
+\f4\fs25\fsmilli12667 \cb11 www
+\f1\fs28 \cb1  URL, Blogspot, WordPress, and an unknown default.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 10. Important conventions and guardrails\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls5\ilvl0
+\fs28 \cf5 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Migration first, entity second:
+\f1\b0  write reviewed Flyway SQL before creating JPA entities. Hibernate validates rather than silently edits production-like schemas.\
+\ls5\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Constructor injection only:
+\f1\b0  dependencies arrive in constructors, not hidden field injection.\
+\ls5\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Records rather than Lombok:
+\f1\b0  DTOs and agent contracts are immutable, explicit Java data types.\
+\ls5\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 HTTP for short lookups; Kafka for durable work:
+\f1\b0  services call retrieval over HTTP, but researcher/writer hops use Kafka because they can take 5\'9690 seconds and must survive restarts.\
+\ls5\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Version cache keys:
+\f1\b0  use prefixes such as 
+\f4\fs25\fsmilli12667 \cb11 search:v1:
+\f1\fs28 \cb1 . When cache semantics change, bump the version instead of trying to delete every old key.\
+\ls5\ilvl0
+\f0\b \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Tests should prefer Testcontainers:
+\f1\b0  later integration tests should use real disposable dependencies instead of mocks that pretend Redis/Kafka/Postgres behave more simply than they do.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 11. Known traps and live documentation discrepancies\
+\pard\pardeftab720\partightenfactor0
+
+\fs28 \cf5 \cb16 \strokec5 Current Maven compiler setting:
+\f1\b0  the live root 
+\f4\fs25\fsmilli12667 \cb11 pom.xml
+\f1\fs28 \cb16  inspected for this guide contains 
+\f4\fs25\fsmilli12667 \cb11 <java.version>21</java.version>
+\f1\fs28 \cb16 , but does not currently show 
+\f4\fs25\fsmilli12667 \cb11 <maven.compiler.release>$\{java.version\}</maven.compiler.release>
+\f1\fs28 \cb16 . The session log says that property was added earlier to fix \'93records are not supported in source 8.\'94 Before relying on Java records through Maven, verify/restore that property and reload Maven in IntelliJ.\
+
+\f0\b Spring Boot version mismatch:
+\f1\b0  the live Maven BOM pins Spring Boot 
+\f4\fs25\fsmilli12667 \cb11 4.1.0
+\f1\fs28 \cb16 . Some narrative instruction files still say Spring Boot 3.3.x and Spring AI 1.0. Treat the live 
+\f4\fs25\fsmilli12667 \cb11 pom.xml
+\f1\fs28 \cb16  as the build truth; the narrative stack line needs later cleanup.\
+\pard\tx220\tx720\pardeftab720\li720\fi-720\partightenfactor0
+\ls6\ilvl0\cf5 \cb1 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 In Spring Boot 4.x, 
+\f4\fs25\fsmilli12667 \cb11 flyway-core
+\f1\fs28 \cb1  alone did not trigger Flyway auto-configuration. The fixed dependency is 
+\f4\fs25\fsmilli12667 \cb11 spring-boot-starter-flyway
+\f1\fs28 \cb1 , with the PostgreSQL Flyway module retained.\
+\ls6\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 SearXNG serves HTML by default. Its mounted configuration must explicitly allow JSON.\
+\ls6\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 The SearXNG container owns port 8080. The three Spring apps must use 8081, 8082, and 8083.\
+\ls6\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 IntelliJ can retain stale Maven/classpath state. After dependency or compiler-property changes, use 
+\f2\i Reload All Maven Projects
+\f1\i0 ; delegating build/run actions to Maven avoids an IDE-vs-terminal mismatch.\
+\ls6\ilvl0\kerning1\expnd0\expndtw0 \outl0\strokewidth0 {\listtext	\uc0\u8226 	}\expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec5 Postgres-backed tests require Docker Desktop and the Compose Postgres container to be running.\
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 12. Roadmap from here\
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrt\brdrnil \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clcbpat9 \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clcbpat9 \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\fs28 \cf2 Near-term next step\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf2 Why it comes next\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+
+\f1\b0 \cf5 \strokec5 Connect 
+\f4\fs25\fsmilli12667 \cb11 POST /api/v1/search
+\f1\fs28 \cb1  to SearXNG using Spring 
+\f4\fs25\fsmilli12667 \cb11 RestClient
+\f1\fs28 \cb1 .\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 It replaces the verified HTTP stub with a real search result while keeping the controller thin.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Connect the existing source-tier resolver to those mapped results.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Every result should carry a useful tier before agents decide what to read.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Design and implement query/URL normalization and versioned cache keys.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 These make identical requests map to one predictable cache entry; this is intentionally a hands-on learning task.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Build Python/FastAPI/trafilatura extractor sidecar.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Only then can 
+\f4\fs25\fsmilli12667 \cb11 /extract
+\f1\fs28 \cb1  return real cleaned article text.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Add manual Redis cache-aside, token bucket, single-flight lock, parallel fetching, and extractor semaphore.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 This is the scheduled Redis/concurrency learning work\'97do not hide it behind framework shortcuts.\cell \row
+
+\itap1\trowd \taflags1 \trgaph108\trleft-108 \tamart200 \tamarb320 \trbrdrl\brdrnil \trbrdrt\brdrnil \trbrdrr\brdrnil 
+\clvertalt \clshdrawnil \clwWidth7350\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx4320
+\clvertalt \clshdrawnil \clwWidth7709\clftsWidth3 \clbrdrt\brdrs\brdrw20\brdrcf10 \clbrdrl\brdrs\brdrw20\brdrcf10 \clbrdrb\brdrs\brdrw20\brdrcf10 \clbrdrr\brdrs\brdrw20\brdrcf10 \clpadt140 \clpadl140 \clpadb140 \clpadr140 \gaph\cellx8640
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 Implement researcher fan-out/fan-in, then structured writer and critic verification.\cell 
+\pard\intbl\itap1\pardeftab720\partightenfactor0
+\cf5 These are the core multi-agent and reliability features.\cell \lastrow\row
+\pard\pardeftab720\sa348\partightenfactor0
+
+\f0\b\fs42 \cf2 \strokec2 13. Definition of success\
+\pard\pardeftab720\sa280\partightenfactor0
+
+\f1\b0\fs28 \cf5 \strokec5 By the end, a person should be able to clone the project, start the local stack, submit a question, watch several researchers work, read a report, and click a claim to see the exact passage that supports or contradicts it. The strongest demo is not \'93the AI wrote a report.\'94 It is: 
+\f0\b \'93the system can prove where each factual sentence came from, and it catches an intentionally injected fabrication.\'94
+\f1\b0 \
+\pard\pardeftab720\sa240\partightenfactor0
+
+\fs24 \cf4 \strokec4 Source material reviewed: AGENTS.md, CLAUDE.md, docs/PLAN.md, docs/LEARNING.md, all module README files, standard Spring Initializr HELP files, and current live source/configuration files.\
+}

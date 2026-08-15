@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Research Platform — Beginner-Friendly Project Guide</title>
+  <style>
+    @page { size: A4; margin: 17mm 16mm 18mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; color: #1f2937; line-height: 1.5; font-size: 10.5pt; }
+    h1 { color: #0f3d5e; font-size: 25pt; margin: 0 0 4px; }
+    h2 { color: #0f3d5e; border-bottom: 2px solid #93c5fd; padding-bottom: 4px; margin-top: 26px; page-break-after: avoid; }
+    h3 { color: #1d4ed8; margin: 18px 0 6px; page-break-after: avoid; }
+    h4 { color: #374151; margin-bottom: 4px; }
+    p, li { margin-top: 5px; }
+    ul { padding-left: 20px; }
+    code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; background: #f3f4f6; padding: 1px 3px; border-radius: 3px; font-size: 9.5pt; }
+    pre { background: #111827; color: #e5e7eb; padding: 10px; border-radius: 5px; white-space: pre-wrap; font-size: 8.8pt; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; page-break-inside: avoid; }
+    th { background: #dbeafe; color: #0f3d5e; text-align: left; }
+    th, td { border: 1px solid #bfdbfe; padding: 7px; vertical-align: top; }
+    .subtitle { color: #4b5563; font-size: 12pt; margin-top: 0; }
+    .note { background: #eff6ff; border-left: 4px solid #2563eb; padding: 9px 12px; margin: 12px 0; }
+    .warn { background: #fff7ed; border-left: 4px solid #ea580c; padding: 9px 12px; margin: 12px 0; }
+    .done { color: #166534; font-weight: 700; }
+    .todo { color: #9a3412; font-weight: 700; }
+    .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; margin: 13px 0; }
+    .box { flex: 1 1 120px; background: #eff6ff; border: 1px solid #93c5fd; border-radius: 5px; padding: 8px; text-align: center; font-weight: 600; }
+    .arrow { align-self: center; color: #2563eb; font-size: 17pt; }
+    .small { color: #6b7280; font-size: 9pt; }
+    .break { page-break-before: always; }
+  </style>
+</head>
+<body>
+  <h1>Research Platform</h1>
+  <p class="subtitle">A beginner-friendly explanation of the system, why it exists, and its live build status</p>
+  <p class="small">Generated from the repository documentation and live workspace on 16 August 2026.</p>
+
+  <div class="note"><strong>One-sentence summary:</strong> this project will take one big research question, split it into smaller questions, research those pieces in parallel, assemble a report, and then verify every factual claim against the source that supposedly supports it.</div>
+
+  <h2>1. The problem this project solves</h2>
+  <p>Imagine asking: <em>“Should India invest more in renewable energy?”</em> A normal chatbot may write a convincing answer, but it can invent figures, mix up sources, or attach a citation that does not actually support the sentence next to it.</p>
+  <p>This platform treats research as a workflow rather than one giant AI prompt:</p>
+  <ol>
+    <li>Break the broad question into smaller, independent sub-questions.</li>
+    <li>Search trusted sources and collect clean text.</li>
+    <li>Let several researcher workers work in parallel.</li>
+    <li>Build a report from structured claims instead of untraceable prose.</li>
+    <li>Send every factual claim back through a critic that checks its original source and stores the supporting passage.</li>
+  </ol>
+  <p>The last step is the special part. A report is not considered trustworthy merely because it has footnotes. Each factual statement must be checkable against specific evidence.</p>
+
+  <h2>2. The intended architecture</h2>
+  <div class="flow">
+    <div class="box">Browser<br>asks a question</div><div class="arrow">→</div>
+    <div class="box">control-plane<br>plans &amp; coordinates</div><div class="arrow">→</div>
+    <div class="box">Redpanda / Kafka<br>durable work messages</div><div class="arrow">→</div>
+    <div class="box">agent-service<br>researcher / writer / critic</div><div class="arrow">→</div>
+    <div class="box">retrieval-service<br>search, fetch, cache, rate-limit</div>
+  </div>
+  <div class="flow">
+    <div class="box">retrieval-service</div><div class="arrow">→</div>
+    <div class="box">SearXNG<br>web search</div><div class="arrow">→</div>
+    <div class="box">extractor sidecar<br>clean article text</div>
+  </div>
+  <div class="flow">
+    <div class="box">control-plane<br>run state / fan-in</div><div class="arrow">→</div>
+    <div class="box">Postgres + pgvector</div>
+    <div class="box">retrieval cache / locks / limits</div><div class="arrow">→</div>
+    <div class="box">Redis</div>
+  </div>
+
+  <h3>Why three services?</h3>
+  <table>
+    <tr><th>Part</th><th>Plain-English job</th><th>Why it is separate</th><th>Port</th></tr>
+    <tr><td><code>retrieval-service</code></td><td>The system’s librarian and courier: searches, fetches pages, cleans content, caches answers, and protects external websites/search budgets.</td><td>It is the single “quota boundary.” No AI worker gets to call a search engine directly.</td><td>8081</td></tr>
+    <tr><td><code>agent-service</code></td><td>The AI workforce: researchers investigate, writers assemble reports, critics verify claims.</td><td>The AI roles share the same operational needs, so they are Spring profiles in one app rather than three extra deployments.</td><td>8082</td></tr>
+    <tr><td><code>control-plane</code></td><td>The front desk and coordinator: receives the question, plans work, sends tasks out, waits for results, and streams progress to the browser.</td><td>Only this service should be externally reachable in the future.</td><td>8083</td></tr>
+    <tr><td><code>common</code></td><td>A small shared Java library for common data records such as future claims and findings.</td><td>It contains data shapes only—no Spring app, database, Kafka client, or business logic.</td><td>Not runnable</td></tr>
+  </table>
+
+  <h2>3. Key technology choices, explained simply</h2>
+  <table>
+    <tr><th>Tool</th><th>What it is</th><th>Why this project uses it</th></tr>
+    <tr><td>Java 21 + Spring Boot</td><td>The main backend language and web framework.</td><td>Matches the author’s Java/Spring background while adding modern Java features such as records and virtual threads.</td></tr>
+    <tr><td>Maven multi-module build</td><td>One parent project that builds several related modules together.</td><td>Lets all services share dependency versions and compile as one coherent project while remaining separately runnable.</td></tr>
+    <tr><td>Docker Compose</td><td>A local “start the whole supporting stack” file.</td><td>Starts Postgres, Redis, Redpanda, and SearXNG together without installing each one manually.</td></tr>
+    <tr><td>Postgres + pgvector</td><td>A reliable relational database; pgvector later adds vector similarity search.</td><td>Holds durable research-run state. A restart does not forget how much work is finished.</td></tr>
+    <tr><td>Redis</td><td>Very fast in-memory key/value storage.</td><td>Will hold disposable shared state: cached searches, rate-limit counters, and short-lived locks.</td></tr>
+    <tr><td>Redpanda</td><td>A Kafka-compatible event broker.</td><td>Moves long-running research tasks durably between services. If a worker restarts, work is not lost.</td></tr>
+    <tr><td>SearXNG</td><td>A self-hosted search aggregator.</td><td>Queries multiple search engines and returns one JSON response, avoiding a separate paid API integration for each provider.</td></tr>
+    <tr><td>Flyway</td><td>A database change-history tool.</td><td>Applies numbered SQL migrations in order. The schema is explicit, reviewable SQL—not Hibernate guessing at tables.</td></tr>
+  </table>
+
+  <h2>4. How a completed research run will work</h2>
+  <ol>
+    <li><strong>Question arrives:</strong> the browser sends one broad question to <code>control-plane</code>.</li>
+    <li><strong>Planning:</strong> an AI planner turns it into roughly 6–8 flat sub-questions. “Flat” means none depends on another this month, so all can start immediately.</li>
+    <li><strong>Fan-out:</strong> <code>control-plane</code> publishes the sub-tasks to <code>research.subtasks</code> in Redpanda/Kafka.</li>
+    <li><strong>Research:</strong> researcher workers ask <code>retrieval-service</code> to search and fetch sources. They do not bypass it.</li>
+    <li><strong>Fan-in:</strong> every completed sub-task atomically increments a Postgres counter. Exactly one worker observes “all expected tasks are done” and triggers the writer.</li>
+    <li><strong>Writing:</strong> the writer creates structured claims. A claim has text plus one source ID, rather than loose prose with vaguely related footnotes.</li>
+    <li><strong>Verification:</strong> the critic re-fetches the cited source, finds the best evidence passage, and marks a claim supported, partial, unsupported, contradicted, or unreachable.</li>
+    <li><strong>Presentation:</strong> the browser receives live progress through SSE and eventually sees a report with visible verification badges.</li>
+  </ol>
+
+  <h3>The fan-in decision: why Postgres instead of a Java counter?</h3>
+  <p>An in-memory <code>AtomicInteger</code> is like a tally counter kept in one person’s pocket. If that person restarts, it is gone. If two copies of the service run, each copy has a different tally. Instead, Postgres owns the tally:</p>
+  <pre>UPDATE dag_levels
+SET completed = completed + 1
+WHERE run_id = ? AND level = 0
+RETURNING completed, expected;</pre>
+  <p>The database makes the increment atomic. One and only one completion sees the final count. Because it is in Postgres, the count survives an application restart.</p>
+
+  <h2>5. What is deliberately not being built</h2>
+  <p>Good scope is a feature. The project intentionally postpones or excludes:</p>
+  <ul>
+    <li>DAG dependencies between sub-questions. The database reserves fields for them, but every current task stays at level 0.</li>
+    <li>Contradiction reconciliation, multi-provider search routing, rich UI, multi-user billing, and early CI/CD/VM deployment.</li>
+    <li>Kubernetes, service mesh, API gateway, Terraform, and extra services during the core month.</li>
+  </ul>
+  <p>A separate optional Week 5 later introduces k3s, KEDA autoscaling for the bursty agent service, ingress, and JWT protection—but only after the local version works.</p>
+
+  <h2>6. Learning value and interview stories</h2>
+  <p>This is intentionally a learning project, not just an app. Each hand-built piece gives a concrete answer to an interview question.</p>
+  <table>
+    <tr><th>Topic</th><th>Practical story this project will provide</th></tr>
+    <tr><td>Cache-aside</td><td>Check Redis → on a miss call the external system → store JSON with a TTL. Redis being down makes requests slower, not incorrect.</td></tr>
+    <tr><td>Redis Lua token bucket</td><td>A per-domain rate limiter must read and update atomically. A Lua script avoids two requests both passing a check-then-act race.</td></tr>
+    <tr><td>Cache stampede protection</td><td>When many agents miss the same cache key, one wins a short Redis lock while others wait and reread. This is the “thundering herd” problem.</td></tr>
+    <tr><td>Parallel Java I/O</td><td><code>CompletableFuture</code> plus an explicit/virtual-thread executor fetches independent URLs in parallel without letting one dead URL sink the batch.</td></tr>
+    <tr><td>Distributed coordination</td><td>Postgres <code>UPDATE ... RETURNING</code>, not a <code>ConcurrentHashMap</code>, coordinates completion across restarts and replicas.</td></tr>
+    <tr><td>Verification/evaluation</td><td>Deliberately corrupt claims and measure whether the critic catches them. This demonstrates AI reliability rather than merely generating prose.</td></tr>
+  </table>
+
+  <h2>7. What is built right now</h2>
+  <p>The following is based on the live workspace inspected for this guide.</p>
+  <table>
+    <tr><th>Area</th><th>Current state</th></tr>
+    <tr><td>Project skeleton</td><td><span class="done">Built.</span> Root Maven aggregator contains <code>common</code>, <code>retrieval-service</code>, <code>agent-service</code>, and <code>control-plane</code>.</td></tr>
+    <tr><td>Local infrastructure</td><td><span class="done">Built.</span> Compose defines Postgres/pgvector, Redis, Redpanda, and SearXNG. SearXNG JSON output was enabled.</td></tr>
+    <tr><td>Database baseline</td><td><span class="done">Built.</span> Flyway migration creates <code>runs</code>, <code>dag_nodes</code>, and <code>dag_levels</code>; Flyway also creates its own history table.</td></tr>
+    <tr><td>Kafka topics</td><td><span class="done">Created locally.</span> <code>research.subtasks</code> has 12 partitions, <code>research.findings</code> has 6, and <code>agent.events</code> has 3.</td></tr>
+    <tr><td>Service health</td><td><span class="done">Verified.</span> Apps are configured for 8081/8082/8083 and Actuator health checks have been verified.</td></tr>
+    <tr><td>retrieval API contract</td><td><span class="done">Built as stubs.</span> Java records define search/extract/quota payloads. The controller exposes all three planned endpoints and currently returns placeholders.</td></tr>
+    <tr><td>Source tiering</td><td><span class="done">Partially built and tested.</span> YAML lists tier-1/2 domains and tier-4 patterns. <code>SourceTierResolver</code> maps URL hosts to a tier and has five focused unit tests. It is not connected to live SearXNG result mapping yet.</td></tr>
+    <tr><td>Real SearXNG call</td><td><span class="todo">Not built.</span> <code>POST /api/v1/search</code> still returns an empty list; the next implementation step is a <code>RestClient</code>-based SearXNG client.</td></tr>
+    <tr><td>Extractor sidecar</td><td><span class="todo">Not built.</span> The extract endpoint is intentionally a stub until the Python/trafilatura sidecar exists.</td></tr>
+    <tr><td>Agents, orchestration, SSE, verification</td><td><span class="todo">Not built.</span> These start in later weeks once retrieval is real.</td></tr>
+  </table>
+
+  <h2>8. The database tables that already exist</h2>
+  <table>
+    <tr><th>Table</th><th>Purpose</th><th>Important constraints</th></tr>
+    <tr><td><code>runs</code></td><td>One record for each top-level research question.</td><td><code>id</code> is a UUID primary key; question/status/timestamps cannot be null; report is optional until writing finishes.</td></tr>
+    <tr><td><code>dag_nodes</code></td><td>One record for each sub-question/research task.</td><td><code>run_id</code> is a required foreign key to <code>runs</code>; <code>depends_on</code> is a nullable self-reference reserved for later; <code>level</code> defaults to 0.</td></tr>
+    <tr><td><code>dag_levels</code></td><td>The durable completion counter for a run level.</td><td>Composite primary key <code>(run_id, level)</code> guarantees one counter per level per run; <code>expected</code>, <code>completed</code>, and <code>deadline</code> make fan-in/release decisions possible.</td></tr>
+    <tr><td><code>flyway_schema_history</code></td><td>Flyway’s own bookkeeping table.</td><td>Records that version 1 ran, so it will never run the same migration twice.</td></tr>
+  </table>
+
+  <h2>9. The retrieval service, in detail</h2>
+  <p>This is the active area of development. It owns all outbound web access, because allowing each AI worker to make its own searches would make budget, caching, and politeness impossible to control centrally.</p>
+  <table>
+    <tr><th>Endpoint</th><th>Input</th><th>Current result</th><th>Eventually</th></tr>
+    <tr><td><code>POST /api/v1/search</code></td><td>A list of queries, result limit, freshness, and minimum tier.</td><td>Returns empty results, zero spent credits, zero cache hits.</td><td>Call SearXNG, map its JSON into internal results, assign source tiers, normalize/cache requests, and limit results.</td></tr>
+    <tr><td><code>POST /api/v1/extract</code></td><td>A list of URLs.</td><td>Returns empty documents.</td><td>Call the Python extractor; return clean text, tier, and a status such as OK or UNREACHABLE.</td></tr>
+    <tr><td><code>GET /api/v1/quota</code></td><td>No input.</td><td>Returns placeholder <code>creditsRemaining: 1000</code>.</td><td>Return the project’s actual self-imposed budget/use information.</td></tr>
+  </table>
+  <p>The API uses Java <strong>records</strong>, a concise immutable data-carrier form. For example, <code>SearchResult(url, title, snippet, tier)</code> automatically has fields, a constructor, read accessors, equality, and a useful <code>toString</code>—without Lombok or handwritten boilerplate.</p>
+
+  <h3>Source quality tiers</h3>
+  <p>The current YAML configuration classifies sources before agents use them:</p>
+  <ul>
+    <li><strong>Tier 1:</strong> exact primary/official sources currently including PIB, RBI, and ISRO.</li>
+    <li><strong>Tier 2:</strong> exact reputable journalism domains currently including The Hindu, Indian Express, and NDTV.</li>
+    <li><strong>Tier 3:</strong> the safe default for any unknown domain.</li>
+    <li><strong>Tier 4:</strong> pattern-matched low-confidence sources, currently Blogspot and WordPress-hosted blogs.</li>
+  </ul>
+  <p>The resolver strips <code>www.</code>, lowercases a URL’s host, checks the exact lists, then checks the glob patterns. Its tests cover a tier-1 domain, a tier-2 <code>www</code> URL, Blogspot, WordPress, and an unknown default.</p>
+
+  <h2>10. Important conventions and guardrails</h2>
+  <ul>
+    <li><strong>Migration first, entity second:</strong> write reviewed Flyway SQL before creating JPA entities. Hibernate validates rather than silently edits production-like schemas.</li>
+    <li><strong>Constructor injection only:</strong> dependencies arrive in constructors, not hidden field injection.</li>
+    <li><strong>Records rather than Lombok:</strong> DTOs and agent contracts are immutable, explicit Java data types.</li>
+    <li><strong>HTTP for short lookups; Kafka for durable work:</strong> services call retrieval over HTTP, but researcher/writer hops use Kafka because they can take 5–90 seconds and must survive restarts.</li>
+    <li><strong>Version cache keys:</strong> use prefixes such as <code>search:v1:</code>. When cache semantics change, bump the version instead of trying to delete every old key.</li>
+    <li><strong>Tests should prefer Testcontainers:</strong> later integration tests should use real disposable dependencies instead of mocks that pretend Redis/Kafka/Postgres behave more simply than they do.</li>
+  </ul>
+
+  <h2>11. Known traps and live documentation discrepancies</h2>
+  <div class="warn"><strong>Current Maven compiler setting:</strong> the live root <code>pom.xml</code> inspected for this guide contains <code>&lt;java.version&gt;21&lt;/java.version&gt;</code>, but does not currently show <code>&lt;maven.compiler.release&gt;${java.version}&lt;/maven.compiler.release&gt;</code>. The session log says that property was added earlier to fix “records are not supported in source 8.” Before relying on Java records through Maven, verify/restore that property and reload Maven in IntelliJ.</div>
+  <div class="warn"><strong>Spring Boot version mismatch:</strong> the live Maven BOM pins Spring Boot <code>4.1.0</code>. Some narrative instruction files still say Spring Boot 3.3.x and Spring AI 1.0. Treat the live <code>pom.xml</code> as the build truth; the narrative stack line needs later cleanup.</div>
+  <ul>
+    <li>In Spring Boot 4.x, <code>flyway-core</code> alone did not trigger Flyway auto-configuration. The fixed dependency is <code>spring-boot-starter-flyway</code>, with the PostgreSQL Flyway module retained.</li>
+    <li>SearXNG serves HTML by default. Its mounted configuration must explicitly allow JSON.</li>
+    <li>The SearXNG container owns port 8080. The three Spring apps must use 8081, 8082, and 8083.</li>
+    <li>IntelliJ can retain stale Maven/classpath state. After dependency or compiler-property changes, use <em>Reload All Maven Projects</em>; delegating build/run actions to Maven avoids an IDE-vs-terminal mismatch.</li>
+    <li>Postgres-backed tests require Docker Desktop and the Compose Postgres container to be running.</li>
+  </ul>
+
+  <h2>12. Roadmap from here</h2>
+  <table>
+    <tr><th>Near-term next step</th><th>Why it comes next</th></tr>
+    <tr><td>Connect <code>POST /api/v1/search</code> to SearXNG using Spring <code>RestClient</code>.</td><td>It replaces the verified HTTP stub with a real search result while keeping the controller thin.</td></tr>
+    <tr><td>Connect the existing source-tier resolver to those mapped results.</td><td>Every result should carry a useful tier before agents decide what to read.</td></tr>
+    <tr><td>Design and implement query/URL normalization and versioned cache keys.</td><td>These make identical requests map to one predictable cache entry; this is intentionally a hands-on learning task.</td></tr>
+    <tr><td>Build Python/FastAPI/trafilatura extractor sidecar.</td><td>Only then can <code>/extract</code> return real cleaned article text.</td></tr>
+    <tr><td>Add manual Redis cache-aside, token bucket, single-flight lock, parallel fetching, and extractor semaphore.</td><td>This is the scheduled Redis/concurrency learning work—do not hide it behind framework shortcuts.</td></tr>
+    <tr><td>Implement researcher fan-out/fan-in, then structured writer and critic verification.</td><td>These are the core multi-agent and reliability features.</td></tr>
+  </table>
+
+  <h2>13. Definition of success</h2>
+  <p>By the end, a person should be able to clone the project, start the local stack, submit a question, watch several researchers work, read a report, and click a claim to see the exact passage that supports or contradicts it. The strongest demo is not “the AI wrote a report.” It is: <strong>“the system can prove where each factual sentence came from, and it catches an intentionally injected fabrication.”</strong></p>
+
+  <p class="small">Source material reviewed: AGENTS.md, CLAUDE.md, docs/PLAN.md, docs/LEARNING.md, all module README files, standard Spring Initializr HELP files, and current live source/configuration files.</p>
+</body>
+</html>

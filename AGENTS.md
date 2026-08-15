@@ -38,7 +38,7 @@ Plus `common/` (shared records, no main class) and two sidecar containers
 
 Java 21 · Spring Boot 3.3.x · **Maven** (multi-module) · Spring AI 1.0
 Redpanda (Kafka API) · Postgres 16 + pgvector · Redis · SearXNG (self-hosted)
-Claude Haiku (extraction, claim grading) + Sonnet (synthesis)
+Codex Haiku (extraction, claim grading) + Sonnet (synthesis)
 
 ---
 
@@ -175,7 +175,7 @@ explain every line that was added. Commit at each working step.
 
 **Not done yet:**
 - `spring.datasource.*` + `spring.jpa.hibernate.ddl-auto=validate` in `control-plane/application.properties` (values come from `docker-compose.yml`'s postgres service)
-- Flyway migration SQL for `runs`, `dag_nodes`, `dag_levels` (Claude's task per the working agreement, queued once datasource config is in)
+- Flyway migration SQL for `runs`, `dag_nodes`, `dag_levels` (Codex's task per the working agreement, queued once datasource config is in)
 - Kafka topics (`research.subtasks`, `research.findings`, `agent.events`)
 - `/actuator/health` check across all 3 apps
 - `retrieval-service` package typo (`com.comback` → `com.comeback`) still unfixed, left as user's call
@@ -196,7 +196,7 @@ explain every line that was added. Commit at each working step.
 
 **Next session starts with:** Week 1 Session 2 — `retrieval-service` endpoints (`POST /api/v1/search`, `POST /api/v1/extract`, `GET /api/v1/quota`), the versioned cache key scheme, URL/query normalization rules, and the YAML source-tiering allowlist, per `docs/PLAN.md`.
 
-### Session 4 (2026-08-16) — retrieval-service DTOs + stub controllers + source tiering v1 built and tested
+### Session 4 (2026-08-16) — retrieval-service DTOs + stub controllers, two build traps found and fixed
 **Done:**
 - `dto` package created under `retrieval-service` with 7 records matching `docs/PLAN.md`'s endpoint contracts: `SearchRequest`, `SearchResult`, `SearchResponse` (`results`, `creditsSpent`, `cacheHits`), `ExtractRequest`, `Document` (`url`, `text`, `tier`, `status`), `ExtractResponse`, `QuotaResponse` — user wrote all of these solo, guided
 - `web` package created with `RetrievalController` — all three endpoints (`POST /api/v1/search`, `POST /api/v1/extract`, `GET /api/v1/quota`) stubbed to return empty/placeholder data, proving the HTTP contract before real logic lands
@@ -205,21 +205,11 @@ explain every line that was added. Commit at each working step.
 - Along the way, fixed several hand-written mistakes as a learning pass: `class` used instead of `record` (records require the `record` keyword, not a parenthesized `class`), a wrong `List` import (`com.sun.tools.javac.util.List` — the compiler's own internal list type — instead of `java.util.List`), a wildcard import missing the `.dto` subpackage (Java wildcard imports don't reach into subpackages), a `package` statement mistakenly given a wildcard, and a missing semicolon
 - Docker daemon was found stopped (left down from a prior session), which surfaced as `control-plane`'s `contextLoads` test failing with `Connection to localhost:5432 refused` — not a code issue; resolved by starting Docker Desktop and `docker compose up -d`
 - Verified all three stub endpoints end-to-end after all fixes: `GET /api/v1/quota` (browser) → `{"creditsRemaining":1000}`, `POST /api/v1/search` (Postman) → `{"results":[],"creditsSpent":0,"cacheHits":0}`, `POST /api/v1/extract` (curl) → `{"documents":[]}`
-- Confirmed SearXNG's real JSON response shape via live curl against the running container (`query`, `results[]` with `url`/`title`/`content`/etc.) — `tier` has no SearXNG equivalent, it's purely our own concept; also confirmed SearXNG ignores any "max results" concept, so `maxResults` from `SearchRequest` must be applied client-side
-- Source tiering v1 (YAML domain allowlist, per `docs/PLAN.md`) built end to end:
-  - Researched and populated real Indian domains in `application.yml`'s `source-tiers` config (tier1: `pib.gov.in`, `rbi.org.in`, `isro.gov.in`; tier2: `thehindu.com`, `indianexpress.com`, `ndtv.com`; tier4-patterns: `*.blogspot.*`, `*wordpress.com`) — fixed two bugs directly (user's explicit "fix it"): missing space after YAML `-` list markers, and `tier4` key renamed to `tier4-patterns` to match the record field via Spring relaxed binding
-  - `SourceTierProperties` (`@ConfigurationProperties(prefix = "source-tiers")` record) — user initially created it as `config.java` sitting directly in `retrievalservice/` with a `package ...config;` declaration; fixed via IntelliJ Refactor (Rename → `SourceTierProperties.java`, Move → `config/` subpackage) to satisfy Java's filename-matches-public-type-name and package-matches-directory rules
-  - Found and fixed an unrelated typo in the same compile pass: `ExtractResponse.java` had `public yeahrecord ExtractResponse(...)` (stray paste) instead of `public record`
-  - `@ConfigurationPropertiesScan` added to `RetrievalServiceApplication`
-  - `SourceTierResolver` (`tier` package, constructor-injected `SourceTierProperties`) written by the user across several guided rounds — algorithm: extract host via `URI.create(url).getHost()` → strip leading `www.` → lowercase → exact-match tier1 → exact-match tier2 → glob-match tier4Patterns (`*` → `.*` regex conversion) → default tier 3. Fixed several real bugs along the way: `tier.Properties` typo instead of `tierProperties`, `return 3` misplaced inside the `for` loop (would've returned 3 after checking only the first pattern instead of all of them), and a method (`matchesPattern`) illegally nested inside another method (Java doesn't allow that — methods can only be declared directly inside a class body) with a case-mismatched parameter name (`Pattern` vs `pattern`)
-  - `SourceTierResolverTest` written (by Claude, at explicit request) — plain JUnit 5, no Spring context needed since the resolver only depends on a plain record — 5 tests covering tier1 exact match, tier2 exact match + `www.` stripping, both tier4 patterns, and the tier3 default. All passing.
-- Discussed constructor injection vs `@Autowired` field injection in depth (immutability via `final` fields, visible dependency list, plain-Java testability, fail-fast on missing/circular deps) and the legitimate remaining use cases for field/setter injection (optional deps, objects Spring doesn't construct itself, test classes, breaking a genuine circular-dependency design smell)
-- Did an honest status check against `docs/PLAN.md`'s full 4-week scope: Week 1 Session 1 done, Session 2 ~25-30% (tiering done+tested; `/search`/`/extract`/`/quota` still stubs; cache keys, URL/query normalization not started), Sessions 3-5 and all of Weeks 2-4 not started
-- Clarified scope boundary: KEDA/Karpenter/Kubernetes autoscaling questions (from the user's day-job interview prep) are explicitly out of this project's scope per `CLAUDE.md`'s "Do not add: Kubernetes..." — this project (docker-compose only) will build real depth on Kafka/Spring-Kafka consumer internals (`max.poll.interval.ms` rebalance/duplication trap, idempotent Postgres-backed fan-in, listener concurrency, partition counts) but not K8s-specific autoscaling mechanics
 
 **Not done yet:**
 - Real `RestClient` → SearXNG integration for `/api/v1/search` (still a stub)
 - `/api/v1/extract`'s real body — blocked on the Python extractor sidecar, which is Session 3's job, not yet built
 - Versioned cache key scheme, URL/query normalization rules (user's task per the working agreement)
+- YAML source-tiering allowlist + `@ConfigurationProperties` record
 
-**Next session starts with:** wiring `POST /api/v1/search` to actually call SearXNG via `RestClient`, mapping results into `SearchResult` with `tier` filled by the now-working `SourceTierResolver`, and applying `maxResults` client-side since SearXNG ignores it.
+**Next session starts with:** wiring `POST /api/v1/search` to actually call SearXNG via `RestClient`, replacing the stub response.

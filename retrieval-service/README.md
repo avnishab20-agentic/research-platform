@@ -50,9 +50,6 @@ Skeleton only — the Spring Boot app boots and `/actuator/health` responds, but
 none of the endpoints above are implemented yet. That's Session 2 onward per
 `docs/PLAN.md`.
 
-> Note: this module's Java package is currently `com.comback.researchplatform`
-> (missing the "e") — a leftover from the Initializr wizard typo that was
-> fixed in the pom's `groupId` but never renamed in the actual package/folder
-> structure. `agent-service` and `control-plane` correctly use
-> `com.comeback.researchplatform`. Worth fixing for consistency before this
-> package gets deeply referenced elsewhere.
+> Package is `com.comeback.researchplatform.retrievalservice` — matches
+> `agent-service` and `control-plane`. (Renamed from the Initializr wizard's
+> `com.comback` typo in Session 3, before real endpoint code landed in it.)

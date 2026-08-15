@@ -1,0 +1,12 @@
+source-tiers:
+  tier1:
+    - pib.gov.in
+    - rbi.org.in
+    - isro.gov.in
+  tier2:
+    - thehindu.com
+    - indianexpress.com
+    - ndtv.com
+  tier4-patterns:
+    - "*.blogspot.*"
+    - "*wordpress.com"

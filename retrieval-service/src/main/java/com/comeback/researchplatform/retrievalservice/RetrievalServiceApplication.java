@@ -1,9 +1,11 @@
-package com.comback.researchplatform.retrievalservice;
+package com.comeback.researchplatform.retrievalservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class RetrievalServiceApplication {
 
     public static void main(String[] args) {
