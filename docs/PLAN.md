@@ -63,6 +63,15 @@ pattern-match tier 4. No LLM.
 Python + FastAPI + trafilatura, ~50 lines. `POST /extract {url, html} → {title, text, publishedAt}`.
 Returns status: `OK | PAYWALLED | ROBOTS_DENIED | UNREACHABLE | TOO_LARGE`.
 
+> **Deviation from the original spec (Session 10, 2026-08-23).** The sidecar returns only
+> `OK | PAYWALLED`. It is handed HTML and never fetches a URL itself, so it cannot observe
+> a network failure (`UNREACHABLE`), a `robots.txt` rule (`ROBOTS_DENIED`), or an oversized
+> response (`TOO_LARGE`) — those are only visible at fetch time, which happens in Java.
+> The full enum is unchanged on `Document.status`; three of its five values are simply set
+> by `retrieval-service` rather than by the sidecar. Keeping the sidecar fetch-free also
+> keeps the quota boundary intact: `retrieval-service` stays the only thing that touches
+> the open web.
+
 ### Session 4: Redis and concurrency — write these by hand
 
 Do NOT use `@Cacheable`, a rate-limit library, or a parallel-stream shortcut here.

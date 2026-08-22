@@ -3,16 +3,14 @@ package com.comeback.researchplatform.retrievalservice.search;
 import com.comeback.researchplatform.retrievalservice.dto.SearchRequest;
 import com.comeback.researchplatform.retrievalservice.dto.SearchResult;
 import com.comeback.researchplatform.retrievalservice.dto.SearchResponse;
+import com.comeback.researchplatform.retrievalservice.hash.Hashing;
 import com.comeback.researchplatform.retrievalservice.tier.SourceTierResolver;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import com.comeback.researchplatform.retrievalservice.quota.QuotaService;
 
 import java.time.Duration;
@@ -31,7 +29,8 @@ public class SearchService {
     private final ObjectMapper objectMapper;
     private final QuotaService quotaService;
 
-    public SearchService(SourceTierResolver sourceTierResolver,  RestClient searxngRestClient , StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper , QuotaService quotaService) {
+
+    public SearchService(SourceTierResolver sourceTierResolver,  @Qualifier("searxngRestClient") RestClient searxngRestClient , StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper , QuotaService quotaService) {
         this.sourceTierResolver = sourceTierResolver;
         this.searxngRestClient = searxngRestClient;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -78,17 +77,7 @@ public class SearchService {
 private static String cacheKey(SearchRequest request , String query){
         String freshness = request.freshness() == null ?"" : request.freshness();
         String raw = normalizeQuery(query) + "|" +freshness;
-        return "search:v1:searxng:" + sha256Hex(raw).substring(0,16);
-    }
-
-    private static String sha256Hex(String input){
-        try{
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash =md.digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        }catch(NoSuchAlgorithmException e){
-            throw new IllegalStateException("SHA-256 not available");
-        }
+        return "search:v1:searxng:" + Hashing.sha256Hex(raw).substring(0,16);
     }
 
 private static String normalizeQuery( String query){

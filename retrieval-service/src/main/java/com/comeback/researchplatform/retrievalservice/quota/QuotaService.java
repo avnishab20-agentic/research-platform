@@ -30,7 +30,7 @@ public class QuotaService {
         return Math.max(0, dailyLimit-spent);
     }
     private String key(){
-        return "quota:v1" + LocalDate.now();
+        return "quota:v1:" + LocalDate.now();
     }
 
 
