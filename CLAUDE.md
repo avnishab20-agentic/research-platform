@@ -23,14 +23,23 @@ Plus `common/` (shared records, no main class) and two sidecar containers
 - DAG dependencies (flat fan-out only; keep the `depends_on`/`level` columns unused)
 - Reconciler / contradiction detection
 - Multi-provider search routing (SearXNG only)
-- VM deployment, CI/CD, Langfuse
+- CI/CD (within weeks 1-4), Langfuse
 - Rich UI (one plain SSE page only)
-- Auth, multi-user, billing
+- Auth, multi-user, billing (within weeks 1-4 — auth/rate-limiting return in Week 5)
 
-### Do not add
+### Do not add (weeks 1-4)
 - New services. Anything that feels like a new service is a Spring profile or a class.
 - New dependencies without asking first.
-- Kubernetes, service mesh, API gateway, Terraform.
+- Kubernetes, service mesh, API gateway, Terraform, VM deployment.
+
+### Week 5 — Kubernetes + KEDA (confirmed, not cut)
+Separate ~15-20 hr phase, only after weeks 1-4 are complete and working on Compose.
+Full build order lives in `docs/PLAN.md`. Runs on a rented cloud VM (k3s + KEDA),
+**not on the local machine** — the 8GB MacBook Air budget below is for weeks 1-4 only.
+Covers: k3s, KEDA ScaledObject on `agent-service` (consumer-lag scaling), ingress +
+public URL, JWT auth on `control-plane`, 3-layer rate limiting (Traefik + per-domain
+token bucket + per-user daily run cap). Explicitly skips Eureka (k8s has service
+discovery built in) and building an OAuth2 authorization server.
 
 ---
 
@@ -126,6 +135,14 @@ Before generating anything non-obvious, say what approach you're taking and why.
 - I'm a backend Java/Spring dev (~4.5 yrs) but new to Docker/docker-compose,
   multi-module Maven, and agentic systems — explain infra concepts from first
   principles (ELI5 is fine, even preferred) rather than assuming I know the jargon.
+- **Default explanation style: plain, layman, conversational — like ChatGPT's
+  "explain it simply" mode, not a textbook.** Strip jargon or define it inline the
+  first time it's used. Use everyday analogies for new concepts (e.g. "a Kafka
+  consumer group is like a team splitting up a to-do list"). Short sentences,
+  plain words, no wall of dense paragraphs. Only go precise/technical-depth when
+  I explicitly ask for the deeper version. As of 2026-08-18 I've only grasped
+  ~20-30% of what's been built so far — so re-explain past decisions in this
+  simpler style whenever they come up again, don't assume they landed the first time.
 - Give me honest progress checks against `docs/PLAN.md` when I ask "are we
   lagging" — a real status table, not reassurance.
 - Some modules I want to build entirely solo once I've learned the pattern once
@@ -223,3 +240,88 @@ explain every line that was added. Commit at each working step.
 - Versioned cache key scheme, URL/query normalization rules (user's task per the working agreement)
 
 **Next session starts with:** wiring `POST /api/v1/search` to actually call SearXNG via `RestClient`, mapping results into `SearchResult` with `tier` filled by the now-working `SourceTierResolver`, and applying `maxResults` client-side since SearXNG ignores it.
+
+### Session 5 (2026-08-17) — live SearXNG search integration
+**Done:**
+- Added `SearxngClientConfig`, providing a constructor-injected `RestClient` bean configured from `searxng.base-url` in `retrieval-service/application.yml`.
+- Added SearXNG response records: `SearxngSearchResponse` (`results`) and `SearxngResult` (`url`, `title`, `content`), matching the JSON returned by the local SearXNG instance.
+- Implemented `SearchService.fetchResults(String)`: `GET /search?q={query}&format=json` through the SearXNG `RestClient`.
+- Implemented `SearchService.search(SearchRequest)`: fans out over `queries`, maps each SearXNG result to the API-owned `SearchResult` (`content` → `snippet`), resolves the source tier via `SourceTierResolver`, filters against `minTier`, globally caps results at `maxResults`, and reports one credit per query.
+- Wired `RetrievalController` through constructor injection to delegate `POST /api/v1/search` to `SearchService.search(request)`.
+- Verified the full path against the real local SearXNG container with a curl request for `Spring Boot REST client`; response contained real results with resolved tiers, `creditsSpent: 1`, and `cacheHits: 0`.
+- Ran `mvn -pl retrieval-service -am test`; all 6 tests passed.
+
+**Started but not complete:**
+- Began the next cache feature by adding query-normalization helpers and injecting `StringRedisTemplate` into `SearchService`. There is no Redis read/write, TTL, JSON serialization, cache-hit accounting, or cache-aside behavior yet; caching is not part of this completed SearXNG integration step.
+
+**Not done yet:**
+- Complete the versioned cache-key scheme and manual cache-aside Redis flow (24-hour search TTL) per `docs/PLAN.md`.
+- `/api/v1/extract`'s real body — blocked on the Python extractor sidecar, which is Session 3's job, not yet built.
+
+**Next session starts with:** either commit the completed SearXNG integration as its own working step, or continue the separate Redis cache-aside feature from the partial setup above.
+
+### Session 6 (2026-08-18) — full retrieval-service walkthrough + confirmed cache-aside is done
+**Done:**
+- Read every file in `retrieval-service` (all `dto`, `config`, `tier`, `search`, `web` classes, both `application.yml`/`application.properties`, and `SourceTierResolverTest`) and gave a full class-by-class, method-by-method explanation of the module — what each piece does and why, tied back to the project's architecture decisions (quota boundary, versioned cache keys, tier filtering order).
+- In the course of that review, confirmed the Redis cache-aside flow flagged as "started but not complete" at the end of Session 5 is actually **fully implemented**: `cacheKey`/`normalizeQuery`, the get-then-set flow against `StringRedisTemplate`, 24-hour TTL, JSON (de)serialization via `ObjectMapper`, and `cacheHits`/`creditsSpent` accounting are all present and working in `SearchService.search()`. Session 5's "not done yet" note about this was stale.
+- Exported that full explanation as a PDF (`~/Downloads/retrieval-service-explainer.pdf`, 5 pages) at the user's request. Built it as styled HTML first, then discovered macOS's `textutil -convert` does **not** support `pdf` as an output format (only txt/rtf/rtfd/html/doc/docx/odt/wordml/webarchive) — used headless Google Chrome's `--print-to-pdf` instead, which is already installed and needed no new dependency.
+
+**Not done yet:**
+- `/api/v1/extract`'s real body — still blocked on the Python extractor sidecar (not yet built).
+- `/api/v1/quota` — still hardcoded `1000`, not backed by a real counter.
+- `freshness` field on `SearchRequest` — accepted but unused in `SearchService`.
+- Nothing in this session touched code; `retrieval-service` is functionally exactly where Session 5 left it (SearXNG search + tiering + Redis cache-aside all working).
+
+**Next session starts with:** either wiring `/api/v1/quota` to a real counter, starting the Python extractor sidecar for `/api/v1/extract`, or moving on to `docs/PLAN.md`'s next scoped item for `retrieval-service`/Week 1.
+
+### Session 7 (2026-08-22) — status audit against PLAN, cache-key correctness fix
+**Done:**
+- Full honest audit of Week 1 Session 2 against `docs/PLAN.md`. Real state: `/search` done (SearXNG + tiering + Redis cache-aside), `/extract` and `/quota` still stubs, source tiering done, 24h search TTL done. **Not** done: PLAN's `sha256`-based cache-key format, URL normalization, extract 7d TTL, 200KB doc cap, Redis `maxmemory-policy allkeys-lru`.
+- Corrected an earlier bad read of my own: query normalization was marked "partial" for `keep quotes`, but `trim().toLowerCase().replaceAll("\\s+"," ")` never touches quote characters — that requirement was already satisfied. Marked ✅.
+- **Found a latent correctness bug in the cache key.** `cacheKey(query)` was built from the query text alone, ignoring `freshness`. Since `freshness` maps to SearXNG's `time_range` and *would* change the upstream response, two searches with the same words but different freshness would collide on one cache entry and serve each other's results. Currently latent only because `freshness` isn't wired through to SearXNG yet — it goes live the moment anyone wires it. Fix ordering therefore matters: **fix the label first, wire `freshness` second.**
+- Grepped both `docs/PLAN.md` and `CLAUDE.md` for `freshness`/`time_range` at the user's prompting: it appears *only* in PLAN's cache-key formula (line 38) and in Session 6's "accepted but unused" note. There is **no planned build step** for making `freshness` functional. Conclusion: PLAN wants freshness *in the key*, not implemented as a feature — so wiring `time_range` through to SearXNG would be inventing unplanned work. Scope corrected to the key only.
+- **Recorded a deliberate deviation from PLAN's cache-key spec** in `docs/PLAN.md`: dropped `maxResults` and `minTier` from `sha256(...)`. Reason: this implementation caches the **raw SearXNG results before tiering/filtering** (`map`/`filter`/`limit` all run after the cache read), so neither field can change the upstream bytes — SearXNG ignores `maxResults` (confirmed against the live container) and has no concept of tiers. Including them would fetch byte-identical data twice and burn a second credit. PLAN's original formula only made sense if the *final filtered list* were cached; ours is the better shape, so the spec was updated rather than silently diverged from.
+
+**Decided (design):**
+- Final key shape: `search:v1:{provider}:{sha256(normQuery|freshness)[0:16]}`, provider hardcoded `searxng` for now so a second provider later doesn't force a cache-wide version bump.
+- Two separate concerns, deliberately split: (a) **correctness** — the label must include everything that changes the upstream response; (b) **tidiness** — hashing, which only exists to give fixed-length, space-free, colon-free keys. Hashing is *not* what fixes the bug.
+
+**Not done yet:**
+- The actual edits: `cacheKey(SearchRequest, String)` signature change, `|`-separated `freshness` (null-guarded to `""`), the `sha256Hex` helper via `MessageDigest` + `HexFormat` (JDK-only, no new dependency), and the call-site update in `search()`.
+- `/api/v1/extract`, `/api/v1/quota` — both still stubs.
+- URL normalization, extract 7d TTL, 200KB cap, Redis `allkeys-lru` (all PLAN Session 2 items).
+
+**Next session starts with:** making the four cache-key edits in `SearchService`, running `mvn -pl retrieval-service -am test`, and verifying two identical `/api/v1/search` calls report `creditsSpent: 0, cacheHits: 1` on the second.
+
+### Session 8 (2026-08-22) — cache-key fix landed + real quota counter, Week 1 nearly closed
+**Done:**
+- **All four Session 7 cache-key edits are in `SearchService`** (they were sitting uncommitted in the tree): `cacheKey(SearchRequest, String)` signature change, `|`-separated `freshness` null-guarded to `""`, `sha256Hex` helper via `MessageDigest` + `HexFormat` (JDK-only), and the call-site update in `search()`. Key shape matches the Session 7 deviation spec: `search:v1:searxng:{sha256(normQuery|freshness)[0:16]}`.
+- **`/api/v1/quota` is no longer a stub** — this closes a "not done yet" that had been open since Session 6:
+  - `QuotaProperties` record (`@ConfigurationProperties(prefix = "quota")`, field `dailyLimit`) per the records-over-`@Value` convention.
+  - `QuotaService`: Redis `INCR` on a daily key with a 24h `EXPIRE`; `remaining()` = `dailyLimit - spent`, floored at 0. `SearchService.search()` calls `recordSpend()` only on cache misses (cache hits are free — matches the PLAN's "2nd identical query costs 0 credits" done-when).
+  - Controller delegates `/quota` to `quotaService.remaining()`; `application.yml` gained `quota.daily-limit: 1000`.
+- `docs/ARCHITECTURE.md` created (~211 lines) — first architecture doc for the repo.
+- `mvn -pl retrieval-service -am test`: green, 6/6 (`SourceTierResolverTest` 5 + contextLoads 1).
+
+**Not verified / not done yet:**
+- The live two-call check from Session 7's exit criteria (`creditsSpent: 0, cacheHits: 1` on second identical call) has **not** been run against docker-compose yet — code is in place but unverified end-to-end.
+- Nothing here is committed — Sessions 5–7's work plus all of today is one uncommitted working tree.
+- `/api/v1/extract` still a stub (blocked on Python extractor sidecar).
+- URL normalization for extract keys, extract 7d TTL, 200KB doc cap, Redis `allkeys-lru` (PLAN Session 2 items).
+- `freshness` deliberately not wired to SearXNG `time_range` — out of scope per Session 7's decision.
+
+**Minor observation (not fixed, user's call):** `QuotaService.key()` returns `"quota:v1" + LocalDate.now()` → `quota:v12026-08-22`. Missing separator; works fine but `quota:v1:2026-08-22` would be consistent with the search key style. One-character fix whenever convenient.
+
+**Verified at session close (2026-08-22):** re-ran `mvn -pl retrieval-service -am test` — BUILD SUCCESS, `Tests run: 6, Failures: 0, Errors: 0` (5 `SourceTierResolverTest` + 1 `contextLoads`). Confirmed the four cache-key edits and all quota wiring are present in the working tree exactly as described above. **Docker daemon is not running**, so the live two-call cache-hit check still cannot be performed — that is the blocker on the one remaining unverified item, not a code problem.
+
+**Next session starts with:** start Docker Desktop → `docker compose up -d` → run the two-call verification (`creditsSpent: 0, cacheHits: 1` on the second identical `/api/v1/search`) → commit the tree (Sessions 5–8 as logical chunks) → then start the Python extractor sidecar for `/api/v1/extract`.
+
+### Session 9 (2026-08-22) — hex handoff artifact + ARCHITECTURE.md diagram rebuild
+**Done:**
+- Re-verified Session 8's claims by actually running `mvn -pl retrieval-service -am test` again (BUILD SUCCESS, 6/6) and reading the code directly rather than trusting the log — confirmed accurate, then appended the verification note and the Docker-daemon-down blocker to the Session 8 entry above.
+- Built a machine-readable session handoff at the user's request, for another agent to pick up context. Used **hex encoding, not a hash** — a hash (e.g. SHA-256) is one-way and cannot be decoded back into the summary, so it would carry zero information to a reading agent; hex is reversible. Wrote `docs/SESSION_HANDOFF.hex` (14,354 hex chars / 7,177-byte plaintext payload covering project scope, the working agreement, Session 7–8 reasoning and code state, verified-vs-not, known issues, uncommitted files, and next-session order) plus `docs/SESSION_HANDOFF.md` with decode instructions (`xxd -r -p` or a Python one-liner). Round-trip verified byte-identical via `diff` before writing.
+- **Rebuilt the `docs/ARCHITECTURE.md` flow diagram from scratch**, programmatically (Python box-drawing generator) rather than hand-aligning ASCII, because the prior diagram (built by another session) had border misalignment. New diagram covers the **entire target system**, not just what's built — Browser → control-plane (①submit/⑩SSE) → Redpanda (②fan-out/⑥fan-in) → agent-service's three profiles (RESEARCHER×6 steps 1-8, WRITER, CRITIC) → retrieval-service (④ the one mandatory web chokepoint) → Redis/SearXNG/Extractor side-by-side → Critic loop math (⑦-⑨) → Postgres/Anthropic API side-by-side at the bottom. Every box/line tagged `(B)`/`(P)`; `retrieval-service`'s header uses `(B/P mixed)` since it mixes done (`/search`, `/quota`) and stubbed (`/extract`) endpoints per-line inside the box. Spliced in place of the old diagram; the rest of the doc (lifecycle steps, component table, DB schema, retrieval-service internals) was left untouched since it was still accurate.
+
+**Not done yet:** same as Session 8's exit list — Docker still not started this session, so the live two-call verification remains unperformed. Nothing in the actual `retrieval-service` code changed this session; only documentation/handoff artifacts were produced.
+
+**Next session starts with:** unchanged from Session 8 — start Docker Desktop → `docker compose up -d` → run the two-call cache-hit verification → commit the tree → then the Python extractor sidecar. To resume with full context, either use `/resume` (harness-native, no action needed) or point a fresh agent at `docs/SESSION_HANDOFF.hex` and decode it per `docs/SESSION_HANDOFF.md`.

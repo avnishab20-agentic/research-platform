@@ -4,10 +4,10 @@
 
 | Wk | Focus | Done when |
 |---|---|---|
-| 1 | Skeleton + `retrieval-service` + CI | Same query twice: 2nd is a cache hit, 0 credits, <50ms. CI green on PR. |
+| 1 | Skeleton + `retrieval-service` | Same query twice: 2nd is a cache hit, 0 credits, <50ms. |
 | 2 | Researcher + Kafka fan-out/fan-in | 6 researchers run in parallel, report assembles |
 | 3 | Writer + Critic + verification | Injected fabrication is caught and re-researched |
-| 4 | SSE page + evals + image publishing | Clone → `compose up` → verified report in 5 min |
+| 4 | SSE page + evals | Clone → `compose up` → verified report in 5 min |
 
 Concurrency and Redis work is woven through weeks 1–2 rather than being a separate
 phase — see `LEARNING.md` for why each piece is built by hand instead of using the
@@ -35,9 +35,20 @@ GET  /api/v1/quota     credits remaining
 
 Cache keys (versioned):
 ```
-search:v1:{provider}:{sha256(normQuery|maxResults|freshness|minTier)[0:16]}
+search:v1:{provider}:{sha256(normQuery|freshness)[0:16]}
 extract:v1:{sha256(normUrl)[0:16]}
 ```
+
+> **Deviation from the original spec (Session 7, 2026-08-22).** The search key was
+> originally `sha256(normQuery|maxResults|freshness|minTier)`. We dropped `maxResults`
+> and `minTier` because this implementation caches the **raw SearXNG results, before
+> tiering and filtering** — `map`/`filter`/`limit` run *after* the cache read. SearXNG
+> ignores `maxResults` (confirmed against the live container; capping is client-side)
+> and has no concept of tiers (`minTier` is applied by `SourceTierResolver` on our
+> side), so neither can change the upstream bytes. Including them would fetch identical
+> data twice and burn a second credit. `freshness` stays in the key because it maps to
+> SearXNG's `time_range` and *does* change the response — it's kept for correctness even
+> though it isn't wired through to SearXNG yet.
 
 URL normalization: lowercase host, strip fragment, strip `utm_*`/`fbclid`/`gclid`/`ref`,
 strip trailing slash, **keep** other query params, **sort params alphabetically**.
@@ -80,8 +91,11 @@ concurrent extractions. Bounded-resource pattern, ~10 lines.
 **Done:** hammer `/api/v1/search` with 20 concurrent identical queries →
 exactly one upstream call, 19 cache hits, no rate-limit breach.
 
-### Session 5: CI pipeline
-See `.github/workflows/ci.yml`. Green on PR before week 1 closes.
+### Session 5: CI pipeline — moved to Week 5
+Per `CLAUDE.md`, CI/CD is explicitly cut for weeks 1-4. The CI pipeline (build +
+test on PR) is now built as part of Week 5's deploy step (see Week 5, step 8),
+alongside the `kubectl apply`/`helm upgrade` deploy job it feeds into. Week 1
+closes after Session 4.
 
 ---
 
@@ -188,14 +202,6 @@ verifying. Ten researchers reporting the same figure = verify once, propagate th
 ```
 OVERREACH is the hardest and most realistic category. Include it.
 
-### Image publishing
-Turn on `.github/workflows/publish.yml` — Jib builds and pushes all three services
-to GHCR on every merge to main, tagged with the git SHA.
-`deploy.yml` stays manual (`workflow_dispatch`) until you actually have a VM.
-
-Also enable the eval gate job in `ci.yml` once the fabrication harness exists:
-a prompt change that regresses catch rate should fail the build.
-
 ### Speedup benchmark
 Write the harness by hand — `ExecutorService` with a fixed pool, `CountDownLatch`
 so all threads start simultaneously rather than staggered, collect timings, report
@@ -251,10 +257,18 @@ onto k8s something that isn't already correct on Compose.
    off the VM's IP (`http://<vm-ip>.nip.io`), enough for cert-manager to issue
    real Let's Encrypt HTTPS. A real domain (~₹800/yr) if you want something
    shareable that isn't a raw IP.
-8. **Rewrite `deploy.yml`**: SSH+Compose → `kubectl apply` / `helm upgrade`.
-   Register a **self-hosted GitHub Actions runner on the VM itself** so the
-   deploy job talks to the cluster over localhost — never expose the k8s API
-   (6443) to the internet. Firewall stays 22/80/443 only, same as before.
+8. **Build the CI/CD pipeline (moved from week 1/4) and `deploy.yml`.** None of
+   weeks 1-4 had CI/CD — it was explicitly cut until now. Build it in this order:
+   - `.github/workflows/ci.yml` — build + test on every PR.
+   - Enable the eval gate job in `ci.yml` (moved from week 4's image-publishing
+     step): a prompt change that regresses fabrication catch rate should fail
+     the build.
+   - `.github/workflows/publish.yml` — Jib builds and pushes all three services
+     to GHCR on every merge to main, tagged with the git SHA.
+   - `deploy.yml`: `kubectl apply` / `helm upgrade`, not SSH+Compose. Register a
+     **self-hosted GitHub Actions runner on the VM itself** so the deploy job
+     talks to the cluster over localhost — never expose the k8s API (6443) to
+     the internet. Firewall stays 22/80/443 only, same as before.
 
 9. **Spring Security + JWT — `control-plane` ONLY.** (~8 hrs)
    `control-plane` is the only service with an ingress, so it's the only one
