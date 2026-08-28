@@ -13,6 +13,10 @@ Concurrency and Redis work is woven through weeks 1–2 rather than being a sepa
 phase — see `LEARNING.md` for why each piece is built by hand instead of using the
 framework shortcut.
 
+Guardrails and evals are woven through weeks 1–4 too — see **Guardrails and evals**
+below. Deliberately small: ~6 hrs total, every limit a number in one `guardrails:` tree,
+one global `ENFORCE`/`SHADOW` switch, three evals running free against fixture mode.
+
 ---
 
 ## Week 1 — Skeleton and retrieval
@@ -150,7 +154,8 @@ spring.kafka.consumer.max-poll-interval-ms: 600000
 
 ### Fixture mode
 Spring profile replaying recorded search + LLM responses from JSON.
-Build it the day the first researcher works. Zero cost, deterministic tests,
+**All three evals depend on this** — an eval you can't afford to run is an eval you
+don't have. Build it the day the first researcher works. Zero cost, deterministic tests,
 and it's how you develop the SSE page in week 4 without burning credits.
 
 ---
@@ -197,6 +202,8 @@ verifying. Ten researchers reporting the same figure = verify once, propagate th
 - The evidence passage is what makes verification credible. Don't skip it.
 
 ### Fabrication injection eval
+Eval #1 of three. Thresholds live in the `guardrails.eval` config block — see
+**Guardrails and evals** below.
 ```
 1. take a report where all claims graded SUPPORTED
 2. corrupt N claims programmatically:
@@ -230,6 +237,132 @@ Not the architecture diagram.
 Start a run → kill the `agent-service` container after 90s → restart it →
 run completes correctly from committed offsets + Postgres DAG state.
 30 seconds, and no in-process orchestration framework can do it.
+
+---
+
+---
+
+## Guardrails and evals (~6 hrs total, woven through weeks 1–4)
+
+Deliberately small. Every guardrail here is **one number in YAML checked at one line of
+code** — no new machinery, no new module, no new dependency. Anything needing its own
+subsystem (circuit breakers, token-level cost accounting, prompt-injection scanning,
+retrieval quality scoring) is **out of scope for weeks 1–4**; see *Deliberately not built*
+below so it isn't silently re-added later.
+
+Limits live in one `guardrails:` tree bound to a single record in `common/`. Never a
+hardcoded constant, never a scattered `@Value`. Tuning a limit is a config edit and a
+restart.
+
+### One global switch, not per-guardrail modes
+
+```yaml
+guardrails:
+  mode: ENFORCE     # ENFORCE | SHADOW — SHADOW logs the breach and proceeds anyway
+```
+
+`SHADOW` is how you introduce a limit without it blocking something legitimate on day
+one: run it shadowed for a few runs, read the log lines, then flip to `ENFORCE`. One
+switch for everything is enough at this scale — per-guardrail modes are config surface
+you'd never actually use.
+
+### The config tree
+
+```yaml
+guardrails:
+  mode: ENFORCE
+
+  run:                        # control-plane
+    max-wall-clock: 10m
+    max-searches: 40          # cost ceiling by call count, not dollars — see note
+    max-llm-calls: 60
+    max-subquestions: 8       # a planner emitting 40 sub-questions is a $4 run
+    max-critic-rounds: 2      # was a hardcoded `round < 2`
+    on-breach: PARTIAL        # PARTIAL | FAIL — never SILENT
+
+  agent:                      # agent-service
+    researcher:
+      max-wall-clock: 90s
+      max-tokens: 25000
+      max-searches: 5
+      on-breach: PARTIAL_LOW_CONFIDENCE
+
+  retrieval:                  # retrieval-service
+    quota-daily-limit: 1000   # now enforced, not just reported
+    per-domain-rps: 1
+    burst: 3
+    extractor-permits: 4
+    fetch-parallelism: 5
+    connect-timeout: 5s
+    read-timeout: 15s
+    max-document-bytes: 204800
+    allowed-schemes: [http, https]
+    block-private-networks: true    # no 10.x / 172.16 / 192.168 / 127.x / ::1
+
+  eval:
+    min-catch-rate: 0.85
+    max-false-positive-rate: 0.10
+```
+
+> **Cost ceiling by call count, not dollars.** Counting searches and LLM calls needs two
+> integers you already increment. Counting *dollars* needs per-call token accounting
+> aggregated per run — roughly four extra hours for a number that only has to be
+> approximately right. `max-searches: 40` and `max-llm-calls: 60` bound the bill to
+> within a few cents of a real ceiling. Revisit only if a run ever costs a surprising
+> amount.
+
+### Build order — where the ~6 hours go
+
+| # | Item | Wk | Hrs |
+|---|---|---|---|
+| 1 | `GuardrailProperties` record in `common/` + the YAML tree + the global mode check | 1 | 1.0 |
+| 2 | **Quota enforcement** — `remaining() <= 0` → 429 *before* spending | 1 | 0.5 |
+| 3 | Fetch hardening — timeouts, scheme allowlist, private-network block | 1 | 0.5 |
+| 4 | Run-level ceiling — search/LLM-call/wall-clock counters, breach → PARTIAL | 2 | 1.5 |
+| 5 | Planner fan-out cap + `max-critic-rounds` read from config | 2-3 | 0.5 |
+| 6 | `EvalRunner` + `evals/` structure, thresholds read from `guardrails.eval` | 4 | 1.0 |
+| 7 | Guardrail tripwire test — 6 cases, one per guardrail above | 4 | 1.0 |
+| | | | **6.0** |
+
+Items 2–5 are enforcement points on limits the plan already had; the per-week guardrails
+already scheduled (token bucket, single-flight, `Semaphore(4)`, 200KB cap, deadline
+sweeper, researcher budgets, `unsupported_ratio`) cost nothing extra — they just read
+their numbers from the tree above instead of from constants.
+
+**A failed run is published, never silently dropped.** Ceiling breached, deadline blown,
+ratio too high → a PARTIAL report or an `UNVERIFIED` banner. Suppressing a bad report
+hides the exact behaviour this project exists to expose.
+
+### The evals — 3, not 6
+
+1. **Fabrication injection** (Week 4, already planned above) — catch rate > 0.85,
+   false-positive rate < 0.10. Both directions, always: a Critic that flags everything
+   scores a perfect catch rate and is useless. Thresholds come from `guardrails.eval`.
+2. **Guardrail tripwire** (item 7) — six cases asserting each guardrail fires when it
+   should: a 300KB document, a `10.0.0.1` URL, a run past `max-searches`, a planner
+   emitting 9 sub-questions, a researcher past 90s, quota at zero. Runs in `SHADOW` and
+   asserts on the log counters. This is what stops a config refactor from silently
+   disabling half the protections.
+3. **Speedup benchmark** (Week 4, already planned above) — concurrency 1 vs 6, ~2.7x.
+
+All run on **fixture mode** (Week 2) and cost $0. One `EvalRunner`, no eval framework, no
+new dependency: `mvn -pl agent-service test -Dtest=EvalRunner -Deval=fabrication`.
+
+CI gate is **Week 5** (step 8), not now — the fabrication eval fails the build if a prompt
+change regresses catch rate.
+
+### Deliberately not built (weeks 1–4)
+
+Written down so it isn't quietly re-added: circuit breakers per upstream, dollar-based
+cost accounting, prompt-injection scanning of extracted text, log redaction, retrieval
+recall@5 eval, planner-quality golden files, per-guardrail `SHADOW` modes. Each is
+defensible; together they're ~35 hrs on an 80-hr plan with no buffer. Revisit in Week 5,
+or when something actually breaks.
+
+The one real exposure this leaves: **scraped page text goes into an LLM prompt
+unfiltered**, so a page containing "ignore previous instructions" is just input. Accepted
+risk on a self-hosted SearXNG for a learning project — but know it's there before anyone
+asks.
 
 ---
 

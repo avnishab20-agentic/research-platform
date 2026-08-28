@@ -1,0 +1,428 @@
+{
+  ".commandcode/settings.json": {
+    "mtime": 1787511107.731468,
+    "seen": 1787875377.662094,
+    "ast_hash": "54726ffc25cdf9bfc973eed27524b762",
+    "semantic_hash": "54726ffc25cdf9bfc973eed27524b762"
+  },
+  "agent-service/mvnw": {
+    "mtime": 1786298066.633195,
+    "seen": 1787875377.6620958,
+    "ast_hash": "ab50dd89da7da2346b28003352eeeeeb",
+    "semantic_hash": "ab50dd89da7da2346b28003352eeeeeb"
+  },
+  "agent-service/pom.xml": {
+    "mtime": 1786569434.409,
+    "seen": 1787875377.662097,
+    "ast_hash": "ae028137965c746e378f0760de589d03",
+    "semantic_hash": "ae028137965c746e378f0760de589d03"
+  },
+  "agent-service/src/main/java/com/comeback/researchplatform/agentservice/AgentServiceApplication.java": {
+    "mtime": 1786298072.576,
+    "seen": 1787875377.662098,
+    "ast_hash": "d7764f3e258cd58392a6f3457eb79d1b",
+    "semantic_hash": "d7764f3e258cd58392a6f3457eb79d1b"
+  },
+  "agent-service/src/test/java/com/comeback/researchplatform/agentservice/AgentServiceApplicationTests.java": {
+    "mtime": 1786298072.588,
+    "seen": 1787875377.662098,
+    "ast_hash": "b2aacab309fd30fbd81156595a15154f",
+    "semantic_hash": "b2aacab309fd30fbd81156595a15154f"
+  },
+  "common/pom.xml": {
+    "mtime": 1786222459.201,
+    "seen": 1787875377.662099,
+    "ast_hash": "f98a864db6509c2ced8d5ab81efbb75e",
+    "semantic_hash": "f98a864db6509c2ced8d5ab81efbb75e"
+  },
+  "control-plane/mvnw": {
+    "mtime": 1786298983.5421588,
+    "seen": 1787875377.662099,
+    "ast_hash": "ab50dd89da7da2346b28003352eeeeeb",
+    "semantic_hash": "ab50dd89da7da2346b28003352eeeeeb"
+  },
+  "control-plane/pom.xml": {
+    "mtime": 1786569434.403,
+    "seen": 1787875377.6621,
+    "ast_hash": "985eb95026dba46d88ef6518c5cd5d29",
+    "semantic_hash": "985eb95026dba46d88ef6518c5cd5d29"
+  },
+  "control-plane/src/main/java/com/comeback/researchplatform/controlplane/ControlPlaneApplication.java": {
+    "mtime": 1786298986.152,
+    "seen": 1787875377.6621,
+    "ast_hash": "4941bbc2fe01ed141ffd847992ed3c37",
+    "semantic_hash": "4941bbc2fe01ed141ffd847992ed3c37"
+  },
+  "control-plane/src/main/resources/db/migration/V1__init_schema.sql": {
+    "mtime": 1786568583.025,
+    "seen": 1787875377.662101,
+    "ast_hash": "9bf93e287883b4ed43a9beb7f48305eb",
+    "semantic_hash": "9bf93e287883b4ed43a9beb7f48305eb"
+  },
+  "control-plane/src/test/java/com/comeback/researchplatform/controlplane/ControlPlaneApplicationTests.java": {
+    "mtime": 1786298986.155,
+    "seen": 1787875377.662101,
+    "ast_hash": "6c66cbd739024ec1b68b8706464e4f27",
+    "semantic_hash": "6c66cbd739024ec1b68b8706464e4f27"
+  },
+  "extractor/main.py": {
+    "mtime": 1787425837.4296708,
+    "seen": 1787875377.662102,
+    "ast_hash": "6e83af98e01b35f8dd65205679f6a0b2",
+    "semantic_hash": "6e83af98e01b35f8dd65205679f6a0b2"
+  },
+  "pom.xml": {
+    "mtime": 1786300374.381,
+    "seen": 1787875377.662102,
+    "ast_hash": "38be94c88315aae6c3544848df47f7c1",
+    "semantic_hash": "38be94c88315aae6c3544848df47f7c1"
+  },
+  "retrieval-service/mvnw": {
+    "mtime": 1786228358.2031379,
+    "seen": 1787875377.662103,
+    "ast_hash": "ab50dd89da7da2346b28003352eeeeeb",
+    "semantic_hash": "ab50dd89da7da2346b28003352eeeeeb"
+  },
+  "retrieval-service/pom.xml": {
+    "mtime": 1786804859.496,
+    "seen": 1787875377.662103,
+    "ast_hash": "398eaba5ac715c79fc32fef2a8c32877",
+    "semantic_hash": "398eaba5ac715c79fc32fef2a8c32877"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/RetrievalServiceApplication.java": {
+    "mtime": 1786824784.383,
+    "seen": 1787875377.6621041,
+    "ast_hash": "70a57a82e4d0446aba92c3d9796cf6ba",
+    "semantic_hash": "70a57a82e4d0446aba92c3d9796cf6ba"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/config/ExtractClientConfig.java": {
+    "mtime": 1787429736.545,
+    "seen": 1787875377.6621041,
+    "ast_hash": "b4c38706d098f6fee65b4397647c9590",
+    "semantic_hash": "b4c38706d098f6fee65b4397647c9590"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/config/QuotaProperties.java": {
+    "mtime": 1787344296.188,
+    "seen": 1787875377.6621041,
+    "ast_hash": "6005f98139f43583bd456c7e71a8c87f",
+    "semantic_hash": "6005f98139f43583bd456c7e71a8c87f"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/config/SearxngClientConfig.java": {
+    "mtime": 1786900564.182,
+    "seen": 1787875377.662105,
+    "ast_hash": "74cefe495fd3762673e163314693e4ee",
+    "semantic_hash": "74cefe495fd3762673e163314693e4ee"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/config/SourceTierProperties.java": {
+    "mtime": 1786824784.374,
+    "seen": 1787875377.662105,
+    "ast_hash": "97803297e5f76cf657b8a0a1cf45e674",
+    "semantic_hash": "97803297e5f76cf657b8a0a1cf45e674"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/Document.java": {
+    "mtime": 1786805313.029,
+    "seen": 1787875377.662106,
+    "ast_hash": "a47d9e5ffa2b623008baa4bc37ce8bed",
+    "semantic_hash": "a47d9e5ffa2b623008baa4bc37ce8bed"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/ExtractRequest.java": {
+    "mtime": 1786805313.024,
+    "seen": 1787875377.662106,
+    "ast_hash": "22305bc3cfbc656b922bfaf39fe54951",
+    "semantic_hash": "22305bc3cfbc656b922bfaf39fe54951"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/ExtractResponse.java": {
+    "mtime": 1786826405.006,
+    "seen": 1787875377.662107,
+    "ast_hash": "0ff3803dfe0b9b11422d8f8a56cd48d1",
+    "semantic_hash": "0ff3803dfe0b9b11422d8f8a56cd48d1"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/QuotaResponse.java": {
+    "mtime": 1786805313.013,
+    "seen": 1787875377.662107,
+    "ast_hash": "97383de43ee9874235fc9b3ad5a22975",
+    "semantic_hash": "97383de43ee9874235fc9b3ad5a22975"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/SearchRequest.java": {
+    "mtime": 1786803365.515,
+    "seen": 1787875377.662108,
+    "ast_hash": "a352de5eb8ac23bd2afdd7e7a8c5e8dd",
+    "semantic_hash": "a352de5eb8ac23bd2afdd7e7a8c5e8dd"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/SearchResponse.java": {
+    "mtime": 1786803365.505,
+    "seen": 1787875377.662108,
+    "ast_hash": "1d87b04294f4bcd3d4f93f3a88bcd4d5",
+    "semantic_hash": "1d87b04294f4bcd3d4f93f3a88bcd4d5"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/dto/SearchResult.java": {
+    "mtime": 1786803365.522,
+    "seen": 1787875377.662109,
+    "ast_hash": "78f7be8300972cf84192128ed375a119",
+    "semantic_hash": "78f7be8300972cf84192128ed375a119"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/extract/ExtractCacheKey.java": {
+    "mtime": 1787433543.9686923,
+    "seen": 1787875377.662109,
+    "ast_hash": "337ba027b1f9b9ba126def8e79cdbb35",
+    "semantic_hash": "337ba027b1f9b9ba126def8e79cdbb35"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/extract/ExtractorClient.java": {
+    "mtime": 1787429736.556,
+    "seen": 1787875377.662109,
+    "ast_hash": "bae8f62a0330692400f9a1e1eb58e0a1",
+    "semantic_hash": "bae8f62a0330692400f9a1e1eb58e0a1"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/extract/ExtractorRequest.java": {
+    "mtime": 1787428971.354,
+    "seen": 1787875377.6621099,
+    "ast_hash": "28ef53a24bd382d0120f8ee7e35ee69e",
+    "semantic_hash": "28ef53a24bd382d0120f8ee7e35ee69e"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/extract/ExtractorResult.java": {
+    "mtime": 1787429736.553,
+    "seen": 1787875377.6621099,
+    "ast_hash": "d79d891c70063a02e00cbd3959422ce5",
+    "semantic_hash": "d79d891c70063a02e00cbd3959422ce5"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/hash/Hashing.java": {
+    "mtime": 1787433543.9659708,
+    "seen": 1787875377.662111,
+    "ast_hash": "1da74449edc8c08ce2a4c5a09ee0f2ae",
+    "semantic_hash": "1da74449edc8c08ce2a4c5a09ee0f2ae"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/quota/QuotaService.java": {
+    "mtime": 1787430002.731,
+    "seen": 1787875377.662111,
+    "ast_hash": "7b5e5217cc5ae90c7d4619a384d1e43f",
+    "semantic_hash": "7b5e5217cc5ae90c7d4619a384d1e43f"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/search/SearchService.java": {
+    "mtime": 1787433544.0431783,
+    "seen": 1787875377.662112,
+    "ast_hash": "dfb8143327455f025e7f49314e88075e",
+    "semantic_hash": "dfb8143327455f025e7f49314e88075e"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/search/SearxngResult.java": {
+    "mtime": 1786901427.294,
+    "seen": 1787875377.662112,
+    "ast_hash": "0467674e71dea37698a9e675f065ab5d",
+    "semantic_hash": "0467674e71dea37698a9e675f065ab5d"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/search/SearxngSearchResponse.java": {
+    "mtime": 1786901483.294,
+    "seen": 1787875377.662113,
+    "ast_hash": "0a2b29a2dff6675119e5938ac8b6d043",
+    "semantic_hash": "0a2b29a2dff6675119e5938ac8b6d043"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/tier/SourceTierResolver.java": {
+    "mtime": 1786828155.9413424,
+    "seen": 1787875377.662113,
+    "ast_hash": "892373c5ce59c5a2726da4161afc809d",
+    "semantic_hash": "892373c5ce59c5a2726da4161afc809d"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/url/UrlNormalizer.java": {
+    "mtime": 1787433422.8051562,
+    "seen": 1787875377.6621141,
+    "ast_hash": "d0a10433e9fdea58d7a544c419061f50",
+    "semantic_hash": "d0a10433e9fdea58d7a544c419061f50"
+  },
+  "retrieval-service/src/main/java/com/comeback/researchplatform/retrievalservice/web/RetrievalController.java": {
+    "mtime": 1787341166.032,
+    "seen": 1787875377.6621141,
+    "ast_hash": "804ee9ef2ff4609efe8bf6b21498495a",
+    "semantic_hash": "804ee9ef2ff4609efe8bf6b21498495a"
+  },
+  "retrieval-service/src/test/java/com/comeback/researchplatform/retrievalservice/RetrievalServiceApplicationTests.java": {
+    "mtime": 1786571543.4660087,
+    "seen": 1787875377.6621141,
+    "ast_hash": "63ad87f1c9fc1d8310bb68d4daff4501",
+    "semantic_hash": "63ad87f1c9fc1d8310bb68d4daff4501"
+  },
+  "retrieval-service/src/test/java/com/comeback/researchplatform/retrievalservice/extract/ExtractCacheKeyTest.java": {
+    "mtime": 1787433554.6038215,
+    "seen": 1787875377.662115,
+    "ast_hash": "653215d7cc44d6cee8a4073d4ec99e54",
+    "semantic_hash": "653215d7cc44d6cee8a4073d4ec99e54"
+  },
+  "retrieval-service/src/test/java/com/comeback/researchplatform/retrievalservice/tier/SourceTierResolverTest.java": {
+    "mtime": 1786828313.2112293,
+    "seen": 1787875377.662115,
+    "ast_hash": "3b5c660a8e4479441fc49a8e6e49bdca",
+    "semantic_hash": "3b5c660a8e4479441fc49a8e6e49bdca"
+  },
+  "retrieval-service/src/test/java/com/comeback/researchplatform/retrievalservice/url/UrlNormalizerTest.java": {
+    "mtime": 1787432909.5022798,
+    "seen": 1787875377.662116,
+    "ast_hash": "f261958f669f0eb229938a2ad189141f",
+    "semantic_hash": "f261958f669f0eb229938a2ad189141f"
+  },
+  ".commandcode/taste/taste.md": {
+    "mtime": 1787511217.5388734,
+    "seen": 1787875377.662117,
+    "ast_hash": "2a22f3ec9d1668057f6c02c2fa92e941",
+    "semantic_hash": "2a22f3ec9d1668057f6c02c2fa92e941"
+  },
+  ".commandcode/taste/taste/taste.md": {
+    "mtime": 1787511217.5276117,
+    "seen": 1787875377.662117,
+    "ast_hash": "e491d5b91da6a89e4a5cfb8e876049dc",
+    "semantic_hash": "e491d5b91da6a89e4a5cfb8e876049dc"
+  },
+  "AGENTS.md": {
+    "mtime": 1786825326.478747,
+    "seen": 1787875377.662118,
+    "ast_hash": "bf4e4e6b97d4751a1a3046cdd6070ec3",
+    "semantic_hash": "bf4e4e6b97d4751a1a3046cdd6070ec3"
+  },
+  "CLAUDE.md": {
+    "mtime": 1787875344.3561995,
+    "seen": 1787875377.662118,
+    "ast_hash": "4ef99179ac4183d2a3b16fbfeb616325",
+    "semantic_hash": "4ef99179ac4183d2a3b16fbfeb616325"
+  },
+  "agent-service/README.md": {
+    "mtime": 1786300083.59632,
+    "seen": 1787875377.662118,
+    "ast_hash": "32102b34402c70b8b7b0ae2a8458c6d6",
+    "semantic_hash": "32102b34402c70b8b7b0ae2a8458c6d6"
+  },
+  "common/README.md": {
+    "mtime": 1786300048.7494507,
+    "seen": 1787875377.662119,
+    "ast_hash": "d2fd0c30b62f09284146ade3a6cff754",
+    "semantic_hash": "d2fd0c30b62f09284146ade3a6cff754"
+  },
+  "control-plane/README.md": {
+    "mtime": 1786300099.2274346,
+    "seen": 1787875377.662119,
+    "ast_hash": "227394149420f08759cb58771ca4cd21",
+    "semantic_hash": "227394149420f08759cb58771ca4cd21"
+  },
+  "docker-compose.yml": {
+    "mtime": 1787430002.724,
+    "seen": 1787875377.6621199,
+    "ast_hash": "ad3424418bef31c26b2b21dacb50a0dd",
+    "semantic_hash": "ad3424418bef31c26b2b21dacb50a0dd"
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1787410065.772,
+    "seen": 1787875377.6621199,
+    "ast_hash": "25e976b8e0eadbc385bc65007f31d5d5",
+    "semantic_hash": "25e976b8e0eadbc385bc65007f31d5d5"
+  },
+  "docs/LEARNING.md": {
+    "mtime": 1786299845.6509666,
+    "seen": 1787875377.662121,
+    "ast_hash": "bc25f23871c99f3ecd4c2efc27d87988",
+    "semantic_hash": "bc25f23871c99f3ecd4c2efc27d87988"
+  },
+  "docs/PLAN.md": {
+    "mtime": 1787433667.3560987,
+    "seen": 1787875377.662121,
+    "ast_hash": "f7060575970395c1d92548c042dc4f1d",
+    "semantic_hash": "f7060575970395c1d92548c042dc4f1d"
+  },
+  "docs/RESEARCH_PLATFORM_GUIDE.html": {
+    "mtime": 1786829348.891673,
+    "seen": 1787875377.662121,
+    "ast_hash": "f2cb10a60e6d1d6d8567d9a42b50d543",
+    "semantic_hash": "f2cb10a60e6d1d6d8567d9a42b50d543"
+  },
+  "docs/SESSION_HANDOFF.md": {
+    "mtime": 1787367186.997558,
+    "seen": 1787875377.662122,
+    "ast_hash": "1f276a40c62d5efa0e7e3b714fdfa44e",
+    "semantic_hash": "1f276a40c62d5efa0e7e3b714fdfa44e"
+  },
+  "docs/story/00-the-world.md": {
+    "mtime": 1787510986.24,
+    "seen": 1787875377.662122,
+    "ast_hash": "8baf0df68c06f1b2dad6a3e6e33f9fb7",
+    "semantic_hash": "8baf0df68c06f1b2dad6a3e6e33f9fb7"
+  },
+  "docs/story/01-search-flow.md": {
+    "mtime": 1787510414.658613,
+    "seen": 1787875377.662123,
+    "ast_hash": "fc90e456b51bd3507c28a4181fbffe5b",
+    "semantic_hash": "fc90e456b51bd3507c28a4181fbffe5b"
+  },
+  "docs/story/02-quota-flow.md": {
+    "mtime": 1787509786.359026,
+    "seen": 1787875377.662123,
+    "ast_hash": "00efcbfd697fdda92430db38110cc6c9",
+    "semantic_hash": "00efcbfd697fdda92430db38110cc6c9"
+  },
+  "docs/story/03-extract-stub-flow.md": {
+    "mtime": 1787509807.3765674,
+    "seen": 1787875377.662123,
+    "ast_hash": "a7dfe5dcdcf9b393ca7e222b6b92b20c",
+    "semantic_hash": "a7dfe5dcdcf9b393ca7e222b6b92b20c"
+  },
+  "docs/story/04-sidecar-extraction-flow.md": {
+    "mtime": 1787509786.3589592,
+    "seen": 1787875377.662124,
+    "ast_hash": "c6c1da8ea0f31131dba07056fbc4a6a2",
+    "semantic_hash": "c6c1da8ea0f31131dba07056fbc4a6a2"
+  },
+  "docs/story/05-boot-and-compose.md": {
+    "mtime": 1787509900.597001,
+    "seen": 1787875377.662124,
+    "ast_hash": "b2f36a29b942c70623bf3a199fc07f02",
+    "semantic_hash": "b2f36a29b942c70623bf3a199fc07f02"
+  },
+  "docs/story/90-method-reference.md": {
+    "mtime": 1787509265.986963,
+    "seen": 1787875377.662125,
+    "ast_hash": "16f799bdc189d1470039bb1127349f52",
+    "semantic_hash": "16f799bdc189d1470039bb1127349f52"
+  },
+  "docs/story/91-glossary.md": {
+    "mtime": 1787511022.0333698,
+    "seen": 1787875377.662125,
+    "ast_hash": "a6811615a8d05558698770dedb4c8607",
+    "semantic_hash": "a6811615a8d05558698770dedb4c8607"
+  },
+  "docs/story/92-check-yourself.md": {
+    "mtime": 1787509265.986223,
+    "seen": 1787875377.662126,
+    "ast_hash": "a32332f16b0461b849ff2b41a1f34c54",
+    "semantic_hash": "a32332f16b0461b849ff2b41a1f34c54"
+  },
+  "docs/story/README.md": {
+    "mtime": 1787497211.1812224,
+    "seen": 1787875377.662126,
+    "ast_hash": "b1e5fc48238243bb1887ec85307079e3",
+    "semantic_hash": "b1e5fc48238243bb1887ec85307079e3"
+  },
+  "extractor/requirements.txt": {
+    "mtime": 1787425837.426043,
+    "seen": 1787875377.662127,
+    "ast_hash": "fc161c6ad91aaf6842355d04c6e045e0",
+    "semantic_hash": "fc161c6ad91aaf6842355d04c6e045e0"
+  },
+  "retrieval-service/README.md": {
+    "mtime": 1786571564.2112586,
+    "seen": 1787875377.662127,
+    "ast_hash": "1a926b36b04a551e99e6d599c5a2c5ee",
+    "semantic_hash": "1a926b36b04a551e99e6d599c5a2c5ee"
+  },
+  "retrieval-service/src/main/resources/application.yml": {
+    "mtime": 1787429189.684,
+    "seen": 1787875377.662127,
+    "ast_hash": "1d386d3cf8287b6fe7c4f1a94ec14692",
+    "semantic_hash": "1d386d3cf8287b6fe7c4f1a94ec14692"
+  },
+  "searxng/settings.yml": {
+    "mtime": 1786298665.411,
+    "seen": 1787875377.6621282,
+    "ast_hash": "c28ad6d3a80cc674099e1b9f67819876",
+    "semantic_hash": "c28ad6d3a80cc674099e1b9f67819876"
+  },
+  "docs/RESEARCH_PLATFORM_GUIDE.pdf": {
+    "mtime": 1786829929.137946,
+    "seen": 1787875377.6621282,
+    "ast_hash": "09f46dc5a94b21f64200b01363bd4bd4",
+    "semantic_hash": "09f46dc5a94b21f64200b01363bd4bd4"
+  }
+}

@@ -18,3 +18,7 @@ quota:
 
 extractor:
   base-url: http://localhost:8000
+  max-document-bytes: 204800
+  cache-ttl: 7d
+  connect-timeout: 5s
+  read-timeout: 10s

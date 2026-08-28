@@ -12,7 +12,7 @@ public class SearxngClientConfig {
     @Bean
     public RestClient searxngRestClient(@Value(("${searxng.base-url}"))String baseUrl) {
         return RestClient.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(baseUrlf)
                 .build();
     }
 }

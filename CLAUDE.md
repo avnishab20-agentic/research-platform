@@ -6,6 +6,8 @@ against the sources it cites.
 
 The verification is the point of the project. Never cut it.
 
+Guardrails and evals are part of that, not polish. Cut UI before you cut either.
+
 ---
 
 ## Scope: 1 month, 3 services
@@ -89,6 +91,28 @@ tissue only — no facts. Free prose with footnotes makes verification impossibl
 **The Critic re-fetches sources and stores the matched evidence passage**, not just
 a verdict. The passage is what makes the verdict checkable.
 
+**Guardrails are configuration, not code paths.** Every limit — call budgets, timeouts,
+document caps, fan-out caps, unsupported-ratio thresholds, eval pass marks — is a number
+in one `guardrails:` tree bound to a single record in `common/`. Never a hardcoded
+constant, never a scattered `@Value`. Tuning is a config edit plus a restart.
+
+**Guardrails stay small on purpose (~6 hrs across weeks 1–4).** If a guardrail needs its
+own subsystem, it isn't in scope: circuit breakers, dollar-level cost accounting,
+prompt-injection scanning and retrieval-quality scoring are listed under *Deliberately
+not built* in `docs/PLAN.md` so they don't creep back in. One global
+`guardrails.mode: ENFORCE | SHADOW` switch, not per-guardrail modes.
+
+**Cost is bounded by call count, not dollars.** `max-searches` and `max-llm-calls` per run
+use integers already being incremented. Dollar accounting needs per-call token
+aggregation for a number that only has to be approximately right.
+
+**A failed run is published, never silently dropped.** Ceiling breached, deadline blown,
+unsupported ratio too high — the result is a PARTIAL or `UNVERIFIED`-banner report.
+Suppressing a bad report hides the exact behaviour the project exists to expose.
+
+**Evals run on fixture mode and cost $0.** Three of them, replayed from recorded JSON.
+An eval you can't afford to run is an eval you don't have.
+
 **Kafka for long-running/durable hops. HTTP for cache lookups.**
 orchestrator↔researchers = Kafka. agents→retrieval-service = HTTP.
 Don't put everything on Kafka.
@@ -116,7 +140,12 @@ written for me.
 Flyway DDL, the Python extractor sidecar, adapter/mapping classes, tests, the SSE page.
 
 **I write, so ask before implementing:** the fan-in logic, the deadline sweeper,
-the Critic loop, cache key normalization, all agent prompts.
+the Critic loop, cache key normalization, all agent prompts, and the guardrail
+*decision* logic (what counts as a breach, what happens on one).
+
+Guardrails split the same way as everything else: **you** write the
+`@ConfigurationProperties` record, the YAML tree, the eval harness and the fixture
+replay; **I** write the enforcement points that read them.
 
 If I ask you to explain rather than implement, explain — don't write the code.
 Before generating anything non-obvious, say what approach you're taking and why.
@@ -361,4 +390,48 @@ explain every line that was added. Commit at each working step.
 
 **Not done — the single remaining PLAN Session 2 item:** wire `POST /api/v1/extract` end to end. That means fetching the HTML in Java, the cache-aside around `ExtractCacheKey` with a **7-day** TTL, the **200KB** document cap, calling `ExtractorClient`, mapping `ExtractorResult` → `dto.Document` with `tier` from `SourceTierResolver`, and deciding `UNREACHABLE`/`ROBOTS_DENIED`/`TOO_LARGE` at fetch time. `/api/v1/extract` is still a stub returning `List.of()`.
 
-**Next session starts with:** that `/extract` wiring (one coherent chunk — it needs real HTTP error handling, which is where the fiddly cases live). Closing it completes PLAN Week 1 Session 2. Then only PLAN Session 4's hand-written concurrency set (Redis Lua token bucket, `CompletableFuture` parallel fetch, single-flight/thundering-herd lock, `Semaphore(4)`) stands between here and Week 2.
+**Later in the same session — `docs/story/` narrative guide generated (uncommitted, untracked):**
+- Built a 10-file narrative guide "The Story of This Codebase" under `docs/story/` (~1,727 lines total) from a full read of every source file, generated against commit `6955d9f`. Every factual claim carries a `file:line` citation; anything untraceable is marked `COULDN'T TRACE` rather than invented.
+- Structure: `00-the-world` (problem, stack+library breakdown with what-breaks-if-deleted, full cast of classes as characters by layer), `01-search-flow`, `02-quota-flow`, `03-extract-stub-flow`, `04-sidecar-extraction-flow`, `05-boot-and-compose` (six numbered flow narrations, each with trigger/diagram/narration/framework-magic/unhappy-paths/if-I-changed-X), `90-method-reference` (every non-trivial Java + Python method with CB/CO/SE/FM columns), `91-glossary` (terms, annotations, patterns; 🧱 marks blueprint-only), `92-check-yourself` (15 questions incl. trace-the-path, answers collapsed), plus a `README.md` TOC.
+- Scope discipline: flows 1–6 narrate only real running code; the agent pipeline (planner → Kafka fan-out → RESEARCHER/WRITER/CRITIC → verified report → SSE) is pointed at as blueprint without inventing unbuilt code.
+- The guide's `00-the-world` also surfaces three Suspicious findings worth a look: root `pom.xml`'s `<java.version>` still not wired into agent-service/control-plane compilers (the "-source 8" trap waiting to recur on their first `record`), `common/README.md` claims dependencies no pom actually declares, and `QuotaService` has a dead `@Configuration` import while the quota remains a fuel gauge not a fuel cutoff.
+- **Not committed** — `docs/story/` is untracked in the working tree; the rest of the tree is clean on top of `6955d9f`.
+
+**Next session starts with:** that `/extract` wiring (one coherent chunk — it needs real HTTP error handling, which is where the fiddly cases live). Closing it completes PLAN Week 1 Session 2. Then only PLAN Session 4's hand-written concurrency set (Redis Lua token bucket, `CompletableFuture` parallel fetch, single-flight/thundering-herd lock, `Semaphore(4)`) stands between here and Week 2. The untracked `docs/story/` guide is ready to commit whenever convenient (pure docs, no code impact).
+
+### Session 11 (2026-08-29) — `/extract` wired end to end, `TokenBucket` built, session method changed
+**Done:**
+- **`POST /api/v1/extract` is no longer a stub — PLAN Week 1 Session 2 is now closed**, after being open since 2026-08-13 across six sessions.
+  - `extract/PageFetcher` (Claude, after the user's start): fetches one URL, **never throws** — every failure comes back as a `FetchedPage` status so one dead URL can't sink a batch. Uses `.exchange()` rather than `.retrieve()` because a 404 is a *result* (`UNREACHABLE`), not an exception to unwind for. Two size guards: `Content-Length` checked before reading a byte, then `readNBytes(maxBytes + 1)` while reading — asking for one byte over the limit proves you're over it while never buffering more than 200KB+1, which closes the heap hole a plain `.body(String.class)` would leave. `.uri(URI.create(url))` not `.uri(url)`, because a String is treated as a URI *template* and a real URL containing `{` would blow up during expansion.
+  - `extract/ExtractService` (Claude): cache-aside over `ExtractCacheKey`, 7-day TTL, `ExtractorClient` call, `SourceTierResolver` for tier, `tools.jackson` ObjectMapper to match `SearchService`.
+  - `RetrievalController` delegates `/extract`; `ExtractClientConfig` switched from a stray `@Value` to the `ExtractProperties` record, per the records-over-`@Value` convention.
+  - `PageFetcherTest` (Claude): 6 tests via `MockRestServiceServer` bound to a `RestClient.Builder` — no Spring context needed, since the class takes its client as a constructor arg. **Suite: 23/23 green** (was 17).
+- **Two design decisions recorded:** (a) `UNREACHABLE`/`TOO_LARGE` are **never cached** — a timeout is a fact about this moment, not about the page, and caching it would blind us for 7 days; `OK` and `PAYWALLED` both cache, since both are stable facts about the page's content. (b) A dead sidecar becomes `UNREACHABLE` per-URL rather than 500-ing the whole batch — slightly dishonest (the *page* was reachable, our sidecar wasn't) but the enum has no better value and inventing one is scope creep.
+- **`ratelimit/TokenBucket` written by the user, guided** (PLAN Session 4, first of four concurrency pieces). Per-domain, capacity 3, 1 token/sec, no background timer — each call converts elapsed time into tokens. Three lines carry the decisions: `elapsedMillis / 1000.0` (the `.0` is load-bearing — integer division floors every sub-second gap to zero and the bucket never refills under steady traffic, which is also why `tokens` is a `double`); `lastRefillMillis = now` **before** the guard (an NTP jump backwards would otherwise freeze the bucket until real time caught up); `Math.min(capacity, ...)` (an idle domain must not bank 28,800 tokens overnight). `synchronized` because refill→check→decrement is three steps and two researchers on the same domain can interleave — the identical race that forces the Redis port to be a Lua script rather than GET-check-SET.
+- **The clock is a constructor-injected `LongSupplier`, not `System.currentTimeMillis()` inside the class.** This is the one decision that makes the class testable: a test moves time nine seconds forward in one instant line instead of `Thread.sleep(9000)`.
+- **Corrections the user worked through on `TokenBucket`** (worth remembering as the shape of the learning loop): `tokens = capacity - lastRefillMillis` (a token count minus a timestamp — "3 apples minus Tuesday"); a `final` field assigned both at its declaration *and* in the constructor (allowed exactly once, either place, never both); a `long lastRefillMillis` constructor parameter instead of the `LongSupplier` — **a photograph of a clock, not a clock**, frozen at construction and unable to answer "what time is it now"; `refill()` returning a number instead of mutating `tokens`; `tryAcquire` returning `true` without spending anything; and `tokens > 0` instead of `>= 1.0` (0.3 of a token isn't enough to make a whole request). The user got decision #1 (a fresh domain's bucket starts **full**, since nobody has been rate-limited by it yet) and the `double` for `tokens` unprompted, and line 23's shape — `now - lastRefill`, scaled by the rate — was structurally correct.
+- **Honest status audit run against `docs/PLAN.md`.** Week 1 ~80% (Sessions 1-3 done, Session 4 ~35%: bucket done; `DomainRateLimiter`, Lua port, `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)` remain). Weeks 2-4 at 0%. Guardrails **~3%** of the 7-item / 6-hour table — only item 3 is partial (fetch timeouts ✅, scheme allowlist and private-network block ❌); items 1, 2, 4, 5, 6, 7 untouched. (An earlier figure of ~10% in this session was wrong: it leaked in the 200KB cap, `TokenBucket` and the TTLs, which PLAN explicitly counts as zero-cost extras *outside* the 6 hours.) Note also that none of the limits built so far read from a `guardrails:` tree — they sit in `ExtractProperties`/`RateLimitProperties`, so guardrail item 1 is a small refactor of what exists, not purely additive. **Quota is still a gauge, not a cutoff**: `remaining()` reports the number but nothing checks it before spending, so a run can burn past 1000 with no symptom but the gauge sitting at 0 (guardrail item 2).
+- **Corrected my own estimate mid-session.** First scored ~60 plan-hours remaining against the user's schedule; that was the wrong denominator, since the SSE page, fixture replay, eval harness, DTOs, Flyway DDL and tests are all Claude's column per the working agreement. Of ~60 hours left, **~38 are actually the user's**, and the 2x learning multiplier applies only to those. That column split is right, but the **schedule figure derived from it was too rosy**. A momentum check at session close (git: first commit 2026-08-08, 11 sessions, 3.35 of 4 Week-1 PLAN sessions done in 21 days ≈ **5.7 delivered plan-hours/week**) projects the remaining ~60 plan-hours at **~10 weeks → mid-November**, roughly 3 weeks past the end-October target. A second method agrees: 38 user-hours × 2 multiplier ÷ 10 hrs/week = 7.6 weeks, plus ~2 for Claude's 22 hours of shared session time. **Believe the observed rate over the stated one.** The user's 10 hrs/week estimate is accurate — 10 real hours simply buys ~5 plan-hours at learning pace. Biggest lever is not more hours but **fewer zero-code sessions**: 2 of 11 (Sessions 6 and 9) produced only docs/handoff artifacts, ~18% of calendar. The remaining 38 are the concentrated hard parts by design (fan-in, Critic loop, concurrency primitives); there's no easy filler left to coast through.
+- **Biggest schedule risk named:** fixture mode sits in Week 2 and all three evals depend on it. Build it the day the first researcher works, not deferred as "test infrastructure" — CLAUDE.md's own rule is to cut UI before evals.
+
+**The method changed, and this is the durable outcome of the session.**
+`PageFetcher` was dictated line-by-line while the user transcribed; it produced working code and a demoralised user (*"I am just writing whatever you say... I am sure i wouldnt be able to wire even one class myself"*). `TokenBucket` was run the other way — spec plus five decisions to reason about, the user writing it wrong twice, one correction at a time with the reasoning — and produced *"i almost got that logic myself, this was the best coding session of this entire project."* Same person, same day, similar difficulty. **From now on: spec and decisions, never dictation; correct one issue per round with the why; only write the class outright when explicitly asked.** The related split to respect is that the user stalls on unfamiliar **library APIs** and is fine on **pure logic** — which is exactly the line the working agreement already draws.
+
+**Not done / not verified:**
+- **Docker was down all session**, so `POST /api/v1/extract` has never been run live against the real trafilatura sidecar. The fetch branches are covered by mocks; the actual round-trip is untested.
+- `RateLimitProperties` record + the `rate-limit:` YAML block, and `DomainRateLimiter` (a `ConcurrentHashMap<String, TokenBucket>` with `computeIfAbsent`, plus host extraction that makes `www.thehindu.com` and `thehindu.com` share one bucket) — both the user's, both small.
+- `TokenBucket` has **no tests yet** (Claude's column, queued next).
+- `TokenBucket` is deliberately **not wired into the fetch path** — where it gets called is an enforcement decision, and enforcement points are the user's column.
+- `CLAUDE.md`/`docs/PLAN.md` carry uncommitted guardrails/evals edits from an earlier session; `docs/story/` (10 files) is untracked and worth committing; `graphify-out/` (89 files) is generated output and should be **gitignored, not committed**.
+
+**Next session starts with:** `RateLimitProperties` + YAML, then `DomainRateLimiter`, then Claude writes the `TokenBucket` tests (a fake clock makes the whole class testable in milliseconds — the payoff for the injected `LongSupplier`). That leaves the Lua port, `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)` to close Week 1. Live-verify `/extract` whenever Docker is next up.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

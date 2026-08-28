@@ -1,7 +1,7 @@
 package com.comeback.researchplatform.retrievalservice.web;
 
 import com.comeback.researchplatform.retrievalservice.dto.*;
-import java.util.List;
+import com.comeback.researchplatform.retrievalservice.extract.ExtractService;
 
 import com.comeback.researchplatform.retrievalservice.search.SearchService;
 import org.springframework.web.bind.annotation.*;
@@ -12,10 +12,12 @@ import com.comeback.researchplatform.retrievalservice.quota.QuotaService;
 public class RetrievalController {
     private final SearchService searchService;
     private final QuotaService quotaService;
+    private final ExtractService extractService;
 
-    public RetrievalController(SearchService searchService, QuotaService quotaService) {
+    public RetrievalController(SearchService searchService, QuotaService quotaService, ExtractService extractService) {
         this.searchService = searchService;
         this.quotaService = quotaService;
+        this.extractService = extractService;
     }
 
     @PostMapping("/search")
@@ -25,7 +27,7 @@ public class RetrievalController {
 
     @PostMapping("/extract")
     public ExtractResponse extract(@RequestBody ExtractRequest request){
-        return new ExtractResponse(List.of());
+        return extractService.extract(request);
     }
 
     @GetMapping("/quota")
