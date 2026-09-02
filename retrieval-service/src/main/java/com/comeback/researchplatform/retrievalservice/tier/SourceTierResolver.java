@@ -1,9 +1,9 @@
 package com.comeback.researchplatform.retrievalservice.tier;
 
 import com.comeback.researchplatform.retrievalservice.config.SourceTierProperties;
+import com.comeback.researchplatform.retrievalservice.url.UrlNormalizer;
 import org.springframework.stereotype.Component;
 
-import java.net.URI;
 
 @Component
 public class SourceTierResolver {
@@ -16,16 +16,9 @@ public class SourceTierResolver {
     }
     public int resolveTier(String url){
         //1. Extract host from url:
-        String host = URI.create(url).getHost();
-        if(host == null){
-            return 3;
-        }
-
-        //2.  2. Normalize — strip a leading www. and lowercase, so WWW.TheHindu.com and thehindu.com both match the same YAML entry:
-        if(host.startsWith("www.")) {
-            host = host.substring(4);
-        }
-            host = host.toLowerCase();
+       String host = UrlNormalizer.host(url);
+       if(host==null)
+           return 3;
 
         //3.  3. Check tier1, then tier2 — exact matches, in order:
         if(tierProperties.tier1().contains(host)) {

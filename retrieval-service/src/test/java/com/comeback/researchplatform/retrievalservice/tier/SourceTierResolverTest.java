@@ -28,6 +28,13 @@ class SourceTierResolverTest {
     }
 
     @Test
+    void resolvesTier2WhenHostIsUppercase() {
+        // Regression: the www. prefix used to be stripped before lowercasing, so "WWW."
+        // never matched "www.", survived into the lookup, and silently fell through to tier 3.
+        assertEquals(2, resolver.resolveTier("https://WWW.TheHindu.com/news/national/article"));
+    }
+
+    @Test
     void resolvesTier4ForBlogspotPattern() {
         assertEquals(4, resolver.resolveTier("https://someblog.blogspot.com/2026/08/post.html"));
     }
