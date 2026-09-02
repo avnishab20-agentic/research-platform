@@ -426,6 +426,59 @@ explain every line that was added. Commit at each working step.
 
 **Next session starts with:** `RateLimitProperties` + YAML, then `DomainRateLimiter`, then Claude writes the `TokenBucket` tests (a fake clock makes the whole class testable in milliseconds — the payoff for the injected `LongSupplier`). That leaves the Lua port, `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)` to close Week 1. Live-verify `/extract` whenever Docker is next up.
 
+### Session 12 (2026-08-30) — `TokenBucket` tests, `UrlNormalizer.host()` extracted, `DomainRateLimiter` done
+**Done:**
+- **Found the tree had not compiled since Session 11.** `SearxngClientConfig` had `.baseUrl(baseUrlf)` — a stray `f` — **committed on `main`**. One-character fix. Lesson worth keeping: run `mvn test` before committing; a broken build sitting in history is expensive to stumble into later.
+- **`TokenBucketTest` written (Claude's column), 7 tests**, each pinning one decision the user reasoned through when writing the class: starts full, refuses when drained, one token per second, `>= 1.0` not `> 0`, sub-second gaps accumulate (goes red the moment anyone writes `/ 1000` instead of `/ 1000.0`), `Math.min` idle cap, and backwards-clock resync. Uses a hand-driven `FakeClock` inner class — eight simulated hours run in microseconds, which is the whole payoff for `TokenBucket` taking an injected `LongSupplier`.
+- **`RateLimitProperties` + `rate-limit:` YAML block** (user). Two corrections: `@Configuration(prefix=...)` used instead of `@ConfigurationProperties` (different annotations — one means "look inside for `@Bean` methods", the other means "fill these fields from YAML"; `@Configuration` has no `prefix` attribute so it did not compile), and the field types were inverted. Landed on **`int capacity, double refillRate`**: capacity is a count of whole requests, while a rate is naturally fractional — `refill-rate: 0.5` (one call every two seconds, for a fragile government site) truncates to `0` under `int` and the bucket then **never refills**. `int` widens to `double` free at the `TokenBucket` call site, so it costs nothing.
+- **`UrlNormalizer.host(String)` extracted** (user, guided). The host rule — get host, lowercase, strip `www.` — existed in `UrlNormalizer.normalize()` *and* `SourceTierResolver`, and `DomainRateLimiter` needed it a third time. Now one copy; `normalize()` delegates to it and throws `IllegalArgumentException` (naming the offending URL) where it previously died on an opaque NPE. Pure move, verified by the 8 existing `UrlNormalizerTest` tests staying green.
+  - **Decision: `host()` returns `null` for a hostless URL rather than throwing.** A low-level utility reports the fact; each caller picks the consequence. Matches what `SourceTierResolver` already does.
+  - Corrections along the way, all recurring traps: **method declared outside the class braces** (4th appearance — produces the misleading `implicitly declared classes are a preview feature` error, because Java assumes you meant the Java 21 bare-method preview; **whenever an error about a method says "preview", check the braces first**); the brace fix then swallowed `normalize()`'s closing brace, nesting the three private methods *inside* it; missing return type on the method declaration; and **a null guard placed after the line it was meant to protect** (`getHost().toLowerCase()` already NPEs before the check runs). Also the guard initially tested `uri == null` — but `URI.create()` never returns null, it throws; the quiet-null case is `getHost()` on a valid-but-hostless URI like `mailto:` or `about:blank`.
+  - Useful side-lesson: **IntelliJ's auto-indent is a picture of the brace structure.** Untouched code suddenly shifting right means a brace went missing above it; code flat against the left margin has escaped its class. Cmd+Alt+L after writing a method surfaces both instantly.
+- **`DomainRateLimiter` done** — `ConcurrentHashMap<String, TokenBucket>`, `computeIfAbsent`, keyed on `UrlNormalizer.host(url)`.
+  - **Decision: a null host returns `false`, it does not throw.** `ConcurrentHashMap` rejects null keys outright, and `PageFetcher` was deliberately built so one bad URL can't sink a batch — throwing here would undo that.
+  - **Decision: the map is never pruned.** A run touches a few hundred domains, a bucket is tens of bytes. Comment records the tradeoff so a later reader knows it was a choice; no eviction built.
+  - **`DomainRateLimiterTest` (Claude), 5 tests.** The load-bearing one fetches three differently-spelled URLs on one site (different paths, `www.`, uppercase scheme) and asserts the fourth is refused — it goes red the instant anyone swaps `host()` back to `normalize()`.
+- **Suite: 23 → 35 green.**
+
+**Later in the same session — the untested half of `retrieval-service` covered (Claude's column), 35 → 67 green:**
+- Before this, four classes carrying real logic had **no tests at all**: `SearchService`, `ExtractService`, `QuotaService`, `ExtractorClient`. All four now have them.
+- **`SearchServiceTest` (8)** — SearXNG faked with `MockRestServiceServer`, Redis with Mockito, `SourceTierResolver`/`ObjectMapper` real (they're pure logic; faking them would only test the fakes). Covers: cache miss spends 1 credit + writes with a 24h TTL + calls `recordSpend()`; **cache hit costs 0, skips upstream entirely and never records a spend** (this is PLAN's "2nd identical query costs 0 credits" as an assertion); tier filtering; `maxResults` capped client-side; SearXNG `content` → our `snippet`; query normalization collapsing case/whitespace to one key; **`freshness` producing distinct keys**; and the key shape `search:v1:searxng:` + 16 chars.
+- **`ExtractServiceTest` (8)** — the interesting axis is *what gets cached*, so most tests assert on whether Redis was written to at all. `OK` and `PAYWALLED` cache with the 7d TTL; `UNREACHABLE`, `TOO_LARGE` and a **dead sidecar** do not. Plus one bad URL not sinking a batch, and four spellings of one article sharing a single cache entry.
+- **`QuotaServiceTest` (5)** — full limit before any spend, subtraction, **floors at 0** (quota is still a gauge, not a cutoff, so overspend is reachable), `INCR` + 24h `EXPIRE`, and the `quota:v1:<date>` key shape.
+- **`ExtractorClientTest` (2)** — the class is five branchless lines, so what these actually guard is the **JSON contract with the Python sidecar**: field names on both sides, which no compiler checks. Directly targets the Session 10 trap where a record component named `Status`/`PublishedAt` compiles fine and stays `null` forever.
+- **`HashingTest` (4)** and **5 more in `UrlNormalizerTest`** covering `host()` directly (lowercase + `www.` strip, path/query/fragment ignored, non-`www.` subdomains kept, `null` for hostless URIs, and `normalize()` throwing a message that names the offending URL).
+- **A real thing surfaced by writing these:** query normalization applies to the **cache key only** — the raw query as typed goes upstream to SearXNG. Correct as designed (normalization exists to make keys collide, not to rewrite the search), but it wasn't written down anywhere, and a test asserting the normalized form on the wire fails. Now documented in the test.
+- Redis is mocked rather than run via Testcontainers, deliberately: every branch tested here is arithmetic, key-shaping and control flow, none of which depends on Redis behaving like Redis. **The real INCR/EXPIRE and TTL round trips still need an integration test** — that gap is unclosed and is a fair criticism of this suite.
+
+**A wrong steer from Claude, corrected in-session:** I said keeping exactly one constructor `public` would let Spring disambiguate a constructor pair. **That is false.** Spring's rule is *exactly one constructor total* → it uses that one; *more than one* → it needs `@Autowired` on the intended one, otherwise it falls back to hunting a no-arg constructor and fails with `No default constructor found`. Visibility is irrelevant. Cost a red build that wasn't the user's mistake. `@Autowired` is now on the public single-arg constructor with a comment saying it is required, not decorative.
+
+**Near-miss worth remembering:** `tryAcquire` was first written calling `normalize()` instead of `host()`. That would have keyed each bucket by the *full URL*, so every article on a site would mint its own fresh full bucket and the limiter would return `true` forever — a rate limiter that compiles, runs, has tests, and limits nothing. Caught before it landed; `everyUrlOnOneDomainDrawsFromTheSameBucket` now guards it permanently.
+
+**Session-method note:** the correction loop ran ~7 rounds on `DomainRateLimiter` and the last few were transcription noise (a package imported instead of a class, `throws` for `throw`, `.rate.` where a comma belonged), ending in *"ugh whatever just show me the class code."* **Once the remaining issues are typos rather than decisions, the loop has stopped teaching — write the class then, without waiting to be asked.** Recorded in memory.
+
+**Found, not fixed (user's call):** `SourceTierResolver` strips `www.` **before** lowercasing, so `WWW.TheHindu.com` keeps its uppercase prefix and silently falls through to **tier 3 instead of tier 2**. Real live bug, ~10 min; the fix is to call `UrlNormalizer.host()`, which also deletes the third copy of the host logic.
+
+**Not done / not verified:**
+- **Docker down for a third consecutive session** — `POST /api/v1/extract` has still never run against the real trafilatura sidecar, only mocks.
+- `DomainRateLimiter` is **deliberately not wired into the fetch path**. Where it gets called is an enforcement decision, and enforcement is the user's column.
+- **The in-memory `TokenBucket`/`DomainRateLimiter` do NOT tick PLAN Session 4 item 2**, which asks for the bucket **as a Redis Lua script**. It is groundwork (same algorithm, and the atomicity lesson transfers), but an in-memory bucket is per-JVM: two `retrieval-service` instances would each keep their own buckets and hand a domain double the rate. That is precisely what Week 5's Kubernetes scaling breaks, and why PLAN specified Redis. `synchronized` solves the race inside one process; a Lua script solves it across all of them.
+
+**Honest Week 1 status — Sessions 1-3 done, Session 5 moved to Week 5, so Week 1 is now entirely Session 4, and Session 4 is 1 of 5:**
+
+| Item | State |
+|---|---|
+| Cache-aside by hand (`RedisTemplate`, Jackson, TTL) | ✅ done (search 24h, extract 7d) |
+| Token bucket as a **Redis Lua script** | ❌ not started |
+| Parallel fetch via `CompletableFuture` (`allOf`, per-future `exceptionally`) | ❌ not started |
+| Single-flight / thundering-herd lock (`SET key val NX PX 30000`) | ❌ not started |
+| `Semaphore(4)` in front of the extractor sidecar | ❌ not started |
+| Done-when: 20 concurrent identical `/search` → 1 upstream call, 19 cache hits | ❌ not run |
+
+Estimated **~6.5 plan-hours** remaining (Lua ~2h, `CompletableFuture` ~2h, single-flight ~1.5h, semaphore ~0.5h, verification ~0.5h). At the ~5.7 delivered plan-hours/week measured in Session 11, that is **~1 to 1.5 calendar weeks to close Week 1**. All four remaining items are the user's column by the working agreement, and are the concentrated hard part by design — no boilerplate left to coast through.
+
+**Next session starts with:** bring Docker up first and live-verify `/extract` against the real sidecar (three sessions overdue; better to find surprises there before layering concurrency on top). Then the Redis Lua token bucket, then `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)`. The `SourceTierResolver` lowercase-ordering bug is a good 10-minute warm-up.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
