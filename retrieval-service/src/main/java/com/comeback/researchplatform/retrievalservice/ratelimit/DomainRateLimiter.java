@@ -1,57 +1,59 @@
 package com.comeback.researchplatform.retrievalservice.ratelimit;
 
-
-
-import com.comeback.researchplatform.retrievalservice.url.UrlNormalizer;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.LongSupplier;
 import com.comeback.researchplatform.retrievalservice.config.RateLimitProperties;
+import com.comeback.researchplatform.retrievalservice.url.UrlNormalizer;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class DomainRateLimiter {
 
+    private static final String KEY_PREFIX = "ratelimit:v1:";
+
+    // Loaded once at startup. Spring Data ships the script to Redis and calls it by SHA
+    // from then on, falling back to the full body if Redis has forgotten it.
+    private static final RedisScript<Long> SCRIPT = new DefaultRedisScript<>(
+            readScript(), Long.class);
+
     private final RateLimitProperties rateLimit;
-    private final LongSupplier clockMillis;
+    private final StringRedisTemplate redis;
 
-    // One bucket per domain, never pruned. A run touches a few hundred domains and a
-    // bucket is a few tens of bytes, so the map stays trivially small. Eviction would
-    // cost more to maintain than it saves.
-    private final Map<String, TokenBucket> tokenBuckets = new ConcurrentHashMap<>();
-
-    // @Autowired is required here, not decorative: with more than one constructor Spring
-    // will not guess, and falls back to looking for a no-arg one it won't find.
-    @Autowired
-    public DomainRateLimiter(RateLimitProperties rateLimit) {
-        this(rateLimit, System::currentTimeMillis);
-    }
-
-    // Package-private, for tests that need to drive the clock by hand.
-    DomainRateLimiter(RateLimitProperties rateLimit, LongSupplier clockMillis) {
+    public DomainRateLimiter(RateLimitProperties rateLimit, StringRedisTemplate redis) {
         this.rateLimit = rateLimit;
-        this.clockMillis = clockMillis;
+        this.redis = redis;
     }
 
     public boolean tryAcquire(String url) {
-
         String host = UrlNormalizer.host(url);
 
-        // No host means there is nothing to rate-limit against, and ConcurrentHashMap
-        // rejects a null key outright. Refuse rather than throw: PageFetcher is built so
-        // one bad URL can't sink a batch, and throwing here would undo that.
+        // No host means there is nothing to rate-limit against. Refuse rather than throw:
+        // PageFetcher is built so one bad URL can't sink a batch.
         if (host == null) {
             return false;
         }
 
-        TokenBucket bucket = tokenBuckets.computeIfAbsent(
-                host,
-                h -> new TokenBucket(rateLimit.capacity(), rateLimit.refillRate(), clockMillis));
+        Long allowed = redis.execute(
+                SCRIPT,
+                List.of(KEY_PREFIX + host),
+                String.valueOf(rateLimit.capacity()),
+                String.valueOf(rateLimit.refillRate()));
 
-        return bucket.tryAcquire();
+        return allowed != null && allowed == 1L;
     }
 
-
-
+    private static String readScript() {
+        try {
+            return new ClassPathResource("scripts/token_bucket.lua")
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            // The script is packaged in our own jar. If it's missing the build is broken,
+            // and starting up to fail one request at a time would only hide that.
+            throw new IllegalStateException("token_bucket.lua missing from classpath", e);
+        }
+    }
 }

@@ -2,93 +2,80 @@ package com.comeback.researchplatform.retrievalservice.ratelimit;
 
 import com.comeback.researchplatform.retrievalservice.config.RateLimitProperties;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Lives in the same package as the class under test, which is what lets it reach the
- * package-private constructor and hand in a clock it controls.
+ * The bucket arithmetic now lives in token_bucket.lua and runs inside Redis, so it cannot
+ * be reached from here. What is still Java — and still worth pinning — is which key a URL
+ * maps to, and the refusal path for a URL with no host.
+ * <p>
+ * The refill/burst/idle-cap behaviour these tests used to cover needs a real Redis. See
+ * the note in the session log; it is currently unverified.
  */
 class DomainRateLimiterTest {
 
-    private static final class FakeClock {
-        private long millis = 1_000_000L;
+    private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    private final DomainRateLimiter limiter =
+            new DomainRateLimiter(new RateLimitProperties(3, 1.0), redis);
 
-        long now() {
-            return millis;
-        }
-
-        void advanceSeconds(long seconds) {
-            millis += seconds * 1000;
-        }
-    }
-
-    private static DomainRateLimiter limiter(FakeClock clock) {
-        return new DomainRateLimiter(new RateLimitProperties(3, 1.0), clock::now);
+    @SuppressWarnings("unchecked")
+    private List<String> keysPassedToRedis() {
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.forClass(List.class);
+        verify(redis).execute(any(RedisScript.class), keys.capture(), any(), any());
+        return keys.getValue();
     }
 
     @Test
-    void allowsABurstUpToCapacityThenRefuses() {
-        DomainRateLimiter limiter = limiter(new FakeClock());
+    void keysTheBucketOnTheHostNotTheWholeUrl() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(1L);
 
+        limiter.tryAcquire("HTTPS://WWW.TheHindu.com/news/rbi?utm_source=x#top");
+
+        // If the key were the whole URL, every article on a site would mint its own fresh
+        // full bucket and the limiter would allow everything, forever.
+        assertEquals(List.of("ratelimit:v1:thehindu.com"), keysPassedToRedis());
+    }
+
+    @Test
+    void passesCapacityAndRefillRateToTheScript() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(1L);
+
+        limiter.tryAcquire("https://thehindu.com/a");
+
+        verify(redis).execute(any(RedisScript.class), anyList(), eq("3"), eq("1.0"));
+    }
+
+    @Test
+    void returnsWhateverTheScriptDecided() {
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(1L);
         assertTrue(limiter.tryAcquire("https://thehindu.com/a"));
-        assertTrue(limiter.tryAcquire("https://thehindu.com/b"));
-        assertTrue(limiter.tryAcquire("https://thehindu.com/c"));
-        assertFalse(limiter.tryAcquire("https://thehindu.com/d"));
+
+        when(redis.execute(any(RedisScript.class), anyList(), any(), any())).thenReturn(0L);
+        assertFalse(limiter.tryAcquire("https://thehindu.com/b"));
     }
 
     @Test
-    void everyUrlOnOneDomainDrawsFromTheSameBucket() {
-        DomainRateLimiter limiter = limiter(new FakeClock());
-
-        // Different paths, different subdomain spelling, different scheme case — all one
-        // server, so all one bucket. If the key were the whole URL instead of the host,
-        // each of these would mint a fresh full bucket and nothing would ever be limited.
-        assertTrue(limiter.tryAcquire("https://thehindu.com/news/rbi"));
-        assertTrue(limiter.tryAcquire("https://www.thehindu.com/news/budget"));
-        assertTrue(limiter.tryAcquire("HTTPS://TheHindu.com/news/election?utm_source=x"));
-
-        assertFalse(limiter.tryAcquire("https://thehindu.com/news/anything-else"));
-    }
-
-    @Test
-    void separateDomainsDoNotShareAnAllowance() {
-        DomainRateLimiter limiter = limiter(new FakeClock());
-
-        limiter.tryAcquire("https://thehindu.com/a");
-        limiter.tryAcquire("https://thehindu.com/b");
-        limiter.tryAcquire("https://thehindu.com/c");
-        assertFalse(limiter.tryAcquire("https://thehindu.com/d"));
-
-        // ndtv.com has never been touched, so its bucket is untouched too.
-        assertTrue(limiter.tryAcquire("https://ndtv.com/a"));
-    }
-
-    @Test
-    void refillsPerDomainAsTimePasses() {
-        FakeClock clock = new FakeClock();
-        DomainRateLimiter limiter = limiter(clock);
-
-        limiter.tryAcquire("https://thehindu.com/a");
-        limiter.tryAcquire("https://thehindu.com/b");
-        limiter.tryAcquire("https://thehindu.com/c");
-        assertFalse(limiter.tryAcquire("https://thehindu.com/d"));
-
-        clock.advanceSeconds(2);
-
-        assertTrue(limiter.tryAcquire("https://thehindu.com/d"));
-        assertTrue(limiter.tryAcquire("https://thehindu.com/e"));
-        assertFalse(limiter.tryAcquire("https://thehindu.com/f"), "two seconds buys two tokens");
-    }
-
-    @Test
-    void aUrlWithNoHostIsRefusedRatherThanThrowing() {
-        DomainRateLimiter limiter = limiter(new FakeClock());
-
-        // A perfectly legal URI with nothing where a hostname would go. ConcurrentHashMap
-        // would throw on a null key, so this has to be caught before the map is touched.
+    void aUrlWithNoHostIsRefusedWithoutTouchingRedis() {
+        // A legal URI with nothing where a hostname would go. There is no domain to limit,
+        // so refuse — PageFetcher is built so one bad URL can't sink a batch.
         assertFalse(limiter.tryAcquire("mailto:someone@example.com"));
         assertFalse(limiter.tryAcquire("about:blank"));
+
+        verify(redis, never()).execute(any(RedisScript.class), anyList(), any(), any());
     }
 }
