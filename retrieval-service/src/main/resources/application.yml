@@ -26,3 +26,5 @@ extractor:
 rate-limit:
   capacity: 3
   refill-rate: 1
+  max-wait-attempts: 3
+

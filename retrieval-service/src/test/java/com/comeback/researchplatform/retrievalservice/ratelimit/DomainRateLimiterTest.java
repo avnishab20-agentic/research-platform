@@ -31,7 +31,7 @@ class DomainRateLimiterTest {
 
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
     private final DomainRateLimiter limiter =
-            new DomainRateLimiter(new RateLimitProperties(3, 1.0), redis);
+            new DomainRateLimiter(new RateLimitProperties(3, 1.0, 3), redis);
 
     @SuppressWarnings("unchecked")
     private List<String> keysPassedToRedis() {
