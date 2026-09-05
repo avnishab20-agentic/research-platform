@@ -479,6 +479,113 @@ Estimated **~6.5 plan-hours** remaining (Lua ~2h, `CompletableFuture` ~2h, singl
 
 **Next session starts with:** bring Docker up first and live-verify `/extract` against the real sidecar (three sessions overdue; better to find surprises there before layering concurrency on top). Then the Redis Lua token bucket, then `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)`. The `SourceTierResolver` lowercase-ordering bug is a good 10-minute warm-up.
 
+### Session 13 (2026-09-03) — `SourceTierResolver` bug fixed, token bucket ported to Redis Lua
+*(Reconstructed from commits `ed2ff50` and `c18de2f` — this session was never logged at the
+time, so this entry describes what the diffs show, not what was discussed.)*
+
+**Done:**
+- **The `SourceTierResolver` lowercase-ordering bug is fixed** (found and left as the user's call
+  in Session 12). It stripped `www.` *before* lowercasing, so `WWW.TheHindu.com` kept its
+  uppercase prefix, never matched the `www.` check, and silently fell through to **tier 3
+  instead of tier 2**. `resolveTier` now delegates to `UrlNormalizer.host(url)` — which deletes
+  the third copy of the host logic at the same time, exactly as Session 12 predicted.
+  `resolvesTier2WhenHostIsUppercase` guards it permanently.
+- **The token bucket moved into Redis as a Lua script** — PLAN Week 1 Session 4, item 2.
+  `scripts/token_bucket.lua` added; the in-memory `TokenBucket` deleted; `DomainRateLimiter`
+  rewritten to load the script from the classpath once and `redis.execute` it by SHA.
+  - The reason for the move, per PLAN: `synchronized` only protects one JVM. Two
+    `retrieval-service` instances would each keep their own `ConcurrentHashMap` of buckets and
+    hand a domain double the configured rate — precisely what Week 5's Kubernetes scaling
+    breaks. Redis runs a script start to finish with nothing interleaved, so read-check-write
+    is atomic across *every* instance.
+  - Time comes from `redis.call('TIME')`, not from the caller, so one JVM with a drifting clock
+    cannot corrupt a bucket every other instance shares.
+  - `EXPIRE` is `ceil(capacity / rate)` — past that point an untouched bucket has refilled to
+    full, which is exactly what a missing key already gives you, so the key carries no
+    information and can go.
+- **`TokenBucketTest` (7 tests) deleted** along with the class it tested, and
+  `DomainRateLimiterTest` rewritten down to 4 mock-based tests covering only what is still
+  Java: which key a URL maps to, the arguments passed, and the no-host refusal. Suite 67 → 60.
+
+**The cost of that trade, and it was real:** every decision the user reasoned through when
+writing the bucket — starts full, `>= 1.0` not `> 0`, sub-second gaps accumulating, the
+`math.min` idle cap, the backwards-clock resync — moved into Lua, where **nothing tested it at
+all**. The rewritten `DomainRateLimiterTest` says so in its own javadoc ("currently
+unverified"). Mocking `redis.execute` proves we called Redis; it can never prove the script
+decided correctly. Closed in Session 14.
+
+### Session 14 (2026-09-05) — the Lua bucket actually run, and pinned by mutation-tested specs
+*(Remote cloud session — no Docker daemon, but `redis-server` turned out to be installed
+natively, which is what unblocked all of this.)*
+
+**Done:**
+- **The Lua token bucket ran for the first time since it was written.** Every behaviour holds
+  against a real Redis: fresh domain starts full, burst of 3 then refusal, refill at 1/sec,
+  8 idle hours capped at 3 (not 28,800), `0.5` tokens refused, backwards clock clamped and
+  resynced, `TTL` = `ceil(capacity/rate)`, and `refill-rate: 0.5` honoured with `TTL` 6.
+- **The atomicity claim is now proven rather than asserted in a comment.** 20 concurrent
+  callers against a fresh capacity-3 bucket → **exactly 3 allowed, 17 refused**. That is the
+  GET-check-SET bug the Lua exists to prevent, demonstrated.
+- **One suspicion checked and cleared:** Redis Lua stores `tokens` and `ts` as full-precision
+  floats (`0.013227050781249878`, `1788651925648.948`) — no integer truncation, no scientific
+  notation. Had either happened, the refill maths would have been quietly wrong.
+- **`TokenBucketLuaTest` written (Claude's column), 9 tests — suite 60 → 69.** This is the
+  replacement for the deleted `TokenBucketTest`: every decision that class pinned is pinned
+  again, on the Lua side, through the real `DomainRateLimiter` so the classpath script load,
+  key prefix and argument passing are covered too.
+  - Elapsed time is faked the same way the deleted `FakeClock` did, only server-side: a seed
+    script rewrites the stored timestamp relative to **Redis's own** clock — the same clock the
+    bucket reads. Eight simulated idle hours still run in microseconds.
+  - **No new dependency.** It talks to the `localhost:6379` that `docker-compose.yml` already
+    publishes, and skips the whole class when Redis is absent rather than failing, so a
+    Docker-less machine can still run `mvn test`. Verified both ways: 9/9 with Redis up,
+    `Tests run: 0` and BUILD SUCCESS with it down. **The cost is stated in the test's javadoc —
+    a green build does not prove the script ran; the count is the only signal.** Testcontainers
+    would close that hole at the price of a new dependency and a hard Docker requirement, and
+    is the user's call to make.
+- **Every test was mutation-checked, and two of them failed the check on the first pass.** This
+  is the part worth keeping:
+  - `/1000.0` → `/1000` **survived**. Lua 5.1 has no integer division; `/` is always float. The
+    trap that bit the Java original *cannot* recur here, so the comment claiming the test
+    caught it was simply false. Rewritten to guard the same outcome by the route that is still
+    reachable — a `math.floor` or a switch to Redis's second-resolution clock — using two
+    successive 600ms gaps, which must sum past 1.0. A single 500ms-then-1500ms pair could not
+    tell floor from correct: both give false-then-true.
+  - Dropping the backwards-clock clamp **survived**, and that was the test's fault: its second
+    `seed()` rewrote the token count and erased the very corruption it was meant to detect.
+    Now only the clock moves, so the bucket's real state (near −60 tokens without the clamp)
+    is what gets observed.
+  - After the fixes, all five mutations are caught: no clamp, `math.floor`, no `math.min`,
+    fresh-bucket-starts-empty, wrong `EXPIRE`, and a never-decrement bucket standing in for a
+    non-atomic one.
+
+**Not done / unchanged:**
+- **No production code changed this session** — the Lua script and `DomainRateLimiter` are
+  byte-for-byte as Session 13 left them. They needed verification, not fixes.
+- `POST /api/v1/extract` **still has never run against the real trafilatura sidecar** — four
+  sessions overdue now. Docker is unavailable in a remote session, so this stays local work.
+- `DomainRateLimiter` is still deliberately **not wired into the fetch path**. Where it gets
+  called is an enforcement decision, and enforcement is the user's column.
+
+**Week 1 Session 4 — 2 of 5:**
+
+| Item | State |
+|---|---|
+| Cache-aside by hand | ✅ done |
+| Token bucket as a **Redis Lua script** | ✅ done (S13), **now verified + tested (S14)** |
+| Parallel fetch via `CompletableFuture` (`allOf`, per-future `exceptionally`) | ❌ not started |
+| Single-flight / thundering-herd lock (`SET key val NX PX 30000`) | ❌ not started |
+| `Semaphore(4)` in front of the extractor sidecar | ❌ not started |
+| Done-when: 20 concurrent identical `/search` → 1 upstream call, 19 cache hits | ❌ not run |
+
+~4.5 plan-hours left in Week 1 (`CompletableFuture` ~2h, single-flight ~1.5h, semaphore ~0.5h,
+verification ~0.5h). All three remaining pieces are the user's column by the working agreement.
+
+**Next session starts with:** `CompletableFuture` fan-out in `PageFetcher`/`ExtractService` —
+`allOf()` to join, `exceptionally()` per future so one dead URL doesn't sink the batch, bounded
+by the `Semaphore(4)`. Then the single-flight lock, which is what PLAN's done-when actually
+measures. Live-verify `/extract` against the sidecar whenever Docker is next up.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
