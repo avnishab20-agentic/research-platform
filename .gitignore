@@ -7,3 +7,7 @@ target/
 .claude/settings.local.json
 # graphify generated output (rebuildable from source)
 graphify-out/
+
+# Python bytecode from the extractor sidecar
+__pycache__/
+*.pyc

@@ -562,10 +562,100 @@ natively, which is what unblocked all of this.)*
 **Not done / unchanged:**
 - **No production code changed this session** — the Lua script and `DomainRateLimiter` are
   byte-for-byte as Session 13 left them. They needed verification, not fixes.
-- `POST /api/v1/extract` **still has never run against the real trafilatura sidecar** — four
-  sessions overdue now. Docker is unavailable in a remote session, so this stays local work.
+- ~~`POST /api/v1/extract` still has never run against the real trafilatura sidecar~~ —
+  **closed later in this same session, see the addendum below.** It had never worked.
 - `DomainRateLimiter` is still deliberately **not wired into the fetch path**. Where it gets
   called is an enforcement decision, and enforcement is the user's column.
+
+**Later in Session 14 — the environment brought up natively, and a real `/extract` bug found**
+
+You asked whether I could just spin the whole stack up here. Partly — and the part that
+worked found a bug that has been in `main` since Session 10.
+
+- **`dockerd` does start.** The daemon, `containerd` and `runc` are all installed, the
+  session runs as uid 0 with full capabilities, and `docker info` comes back clean.
+  **But `docker compose up` cannot pull images**: blob downloads from
+  `production.cloudfront.docker.com` get a **403 from the egress proxy** — an organisation
+  policy denial, which the proxy's own README says to report rather than route around. So
+  Docker Hub is closed; the daemon itself is fine.
+- **PyPI is allowed**, so the stack came up natively instead: `redis-server` (already
+  installed) on 6379 with the same `allkeys-lru` settings compose uses, the **real
+  trafilatura sidecar** in a venv under uvicorn on 8000, and `retrieval-service` via
+  `mvn spring-boot:run` on 8081. Test pages are served over plain HTTP, with
+  `thehindu.com`, `pib.gov.in` and `someblog.blogspot.com` pointed at `127.0.0.1` in
+  `/etc/hosts` so tier resolution is exercised on real fetches instead of being mocked.
+
+**The bug: `POST /api/v1/extract` has never worked against the real sidecar, and reported
+the failure as `UNREACHABLE`.** The very first live call returned
+`{"status":"UNREACHABLE","tier":2}` for a page that was plainly there.
+
+- `PageFetcher` was innocent — a standalone probe with its exact client config fetched the
+  page fine (200, 1653 bytes). The failure was the next hop.
+- The extractor's own log had it: `WARNING: Unsupported upgrade request` followed by
+  `POST /extract HTTP/1.1 422 Unprocessable Entity`. Dumping the raw bytes the Java client
+  put on the socket showed why — `Upgrade: h2c`, `HTTP2-Settings: ...`,
+  `Transfer-encoding: chunked`.
+- **Root cause:** `ExtractClientConfig` never set a request factory, so it got Spring's
+  default, which wraps the JDK's `HttpClient`. That client opens every cleartext request
+  with an HTTP/2-over-cleartext upgrade offer and sends the body chunked. uvicorn (h11)
+  does not speak h2c: it warns, **discards the body**, and FastAPI answers
+  `422 {"loc":["body"],"msg":"Field required"}` — the body was not malformed, it was
+  *absent*. `RestClient.retrieve()` throws on the 422, `ExtractService` catches it, and per
+  its own comment ("the sidecar being down is our outage") reports the page `UNREACHABLE`.
+- **Why `PageFetcher` worked and `ExtractorClient` didn't:** `PageFetchClientConfig`
+  explicitly sets `SimpleClientHttpRequestFactory`; `ExtractClientConfig` didn't. Plain
+  `HttpURLConnection`, no upgrade offer, `Content-Length` body. Confirmed side by side
+  against the live sidecar: default factory → 422; `SimpleClientHttpRequestFactory` →
+  `status=OK`, title parsed, 1060 chars of text, `publishedAt=2026-09-04`.
+- **Fixed** in `ExtractClientConfig` (Claude — it is a client/adapter config class, and the
+  diagnosis was worthless without the one-line fix; worth a review either way). The
+  connect/read timeouts from `ExtractProperties` were wired in at the same time, since an
+  unbounded sidecar call sits in the same fetch path — revert that half if you'd rather
+  keep the change minimal.
+
+**Why four sessions of unit tests never caught it:** `ExtractorClientTest` binds
+`MockRestServiceServer` to the builder, and **that replaces the request factory**. The JSON
+is matched in memory and nothing ever reaches a socket. The test was green and correct
+about the payload the whole time; the defect was one layer below it. *A mock that stands in
+for the transport cannot test the transport.*
+
+**`POST /api/v1/extract` verified live, every branch, in one batch** (the item carried as
+"not verified" since Session 10):
+
+| URL | Status | Tier | Result |
+|---|---|---|---|
+| `thehindu.com/article.html` | `OK` | 2 | 1060 chars, nav/footer/ads/script stripped by real trafilatura |
+| `pib.gov.in/article.html` | `OK` | **1** | tier 1 resolved on a live fetch |
+| `thehindu.com/paywall.html` | `PAYWALLED` | 2 | 80 chars, under the sidecar's 200-char bar |
+| `thehindu.com/huge.html` | `TOO_LARGE` | 2 | 1.26 MB rejected against the 200 KB cap |
+| `thehindu.com/nope.html` | `UNREACHABLE` | 2 | real 404 |
+| `no-such-host.invalid/x.html` | `UNREACHABLE` | 3 | unknown host |
+| `someblog.blogspot.com/article.html` | `OK` | **4** | tier 4 glob matched live |
+
+All seven came back in one response — **one bad URL does not sink the batch**, as designed.
+
+**Cache behaviour verified live too:** exactly 4 keys written for that batch — the two
+`UNREACHABLE` and the `TOO_LARGE` were **not** cached, matching Session 11's decision, while
+both `OK`s and the `PAYWALLED` were, at a 7-day TTL (`604786s`). Four spellings of one
+article (`www.`, uppercase host, `?utm_source=`, `#top`) collapsed to **one** cache entry.
+One cold call hit the sidecar; the next five identical requests hit it **zero** times.
+
+**`ExtractClientConfigTest` added (3 tests, suite 69 → 72)** — it runs the bean
+`ExtractClientConfig` really builds against a real socket, using the JDK's own
+`com.sun.net.httpserver.HttpServer` (no new dependency, no Docker).
+
+- **Reverting the fix showed only 1 of the 3 goes red**, and that is worth knowing: the JDK's
+  `HttpServer` is well-behaved, so it ignores the upgrade offer and reads the chunked body
+  the way uvicorn refuses to. The body assertion therefore passes even against the broken
+  config. **`doesNotOfferAnHttp2Upgrade` is the actual guard** — the offer is observable
+  from any server, while the dropped body is uvicorn-specific. Both the class javadoc and
+  the two method comments now say so, so nobody later "simplifies" the class down to the
+  body check and silently loses the regression.
+
+**Still not verified, and honestly out of reach here:** `/api/v1/search` end to end, because
+SearXNG only ships as a Docker image and Docker Hub is policy-blocked. It was last verified
+live in Session 5 and has 8 unit tests. Postgres and Redpanda are blocked for the same
+reason, which doesn't matter yet — neither is in `retrieval-service`'s path.
 
 **Week 1 Session 4 — 2 of 5:**
 
