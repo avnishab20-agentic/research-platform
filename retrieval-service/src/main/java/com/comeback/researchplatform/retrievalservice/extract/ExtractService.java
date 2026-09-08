@@ -16,12 +16,15 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Cache-aside around fetch + extract, one URL at a time.
+ * Cache-aside around fetch + extract, one URL per virtual thread.
  * <p>
- * Parallelism is deliberately absent here — {@code CompletableFuture} fan-out, the
- * per-domain token bucket and the single-flight lock are PLAN Session 4 and land later.
+ * The single-flight lock and the extractor {@code Semaphore(4)} are PLAN Session 4
+ * and land later.
  */
 @Service
 public class ExtractService {
@@ -56,11 +59,21 @@ public class ExtractService {
     }
 
     public ExtractResponse extract(ExtractRequest request) {
-        List<Document> documents = new ArrayList<>();
-        for (String url : request.urls()) {
-            documents.add(extractOne(url));
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<CompletableFuture<Document>> futures = new ArrayList<>();
+            for (String url : request.urls()) {
+                futures.add(CompletableFuture
+                        .supplyAsync(() -> extractOne(url), executor)
+                        // extractOne is written not to throw, but Redis and Jackson can.
+                        // Without this, one throw fails the whole batch on join().
+                        .exceptionally(e -> {
+                            log.warn("extract failed for {}", url, e);
+                            return new Document(url, null, sourceTierResolver.resolveTier(url), "UNREACHABLE");
+                        }));
+            }
+            // Second pass on purpose: joining inside the submit loop would serialise it.
+            return new ExtractResponse(futures.stream().map(CompletableFuture::join).toList());
         }
-        return new ExtractResponse(documents);
     }
 
     private Document extractOne(String url) {

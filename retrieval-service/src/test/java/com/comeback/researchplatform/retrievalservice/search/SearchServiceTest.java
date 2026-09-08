@@ -55,6 +55,11 @@ class SearchServiceTest {
         valueOps = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(valueOps);
 
+        // Default: this caller wins the single-flight lock, which is the path every
+        // pre-existing test was written against. Unstubbed, setIfAbsent returns null and
+        // every test would silently take the loser path and poll for five seconds.
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+
         quotaService = mock(QuotaService.class);
         objectMapper = new ObjectMapper();
 
