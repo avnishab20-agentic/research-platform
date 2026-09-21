@@ -1,9 +1,12 @@
 package com.comeback.researchplatform.controlplane.fanin;
 
+import com.comeback.researchplatform.common.KafkaTopics;
 import com.comeback.researchplatform.common.ResearchFinding;
+import com.comeback.researchplatform.common.RunReady;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -35,10 +38,12 @@ public class FanInService {
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public FanInService(JdbcTemplate jdbc, ObjectMapper objectMapper) {
+    public FanInService(JdbcTemplate jdbc, ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
@@ -61,6 +66,7 @@ public class FanInService {
             jdbc.update("UPDATE runs SET status = 'FINDINGS_COMPLETE', updated_at = now() WHERE id = ?",
                     finding.runId());
             log.info("Run {} fan-in complete: all {} researchers finished", finding.runId(), expected);
+            kafkaTemplate.send(KafkaTopics.RUN_READY, finding.runId().toString(), new RunReady(finding.runId()));
         }
     }
 
@@ -87,6 +93,9 @@ public class FanInService {
                     runId, level);
             jdbc.update("UPDATE runs SET status = 'PARTIAL', updated_at = now() WHERE id = ?", runId);
             log.warn("Run {} level {} deadline exceeded; released as PARTIAL", runId, level);
+            // Still hand off to the Writer with whatever findings did arrive --
+            // CLAUDE.md: "a failed run is published, never silently dropped."
+            kafkaTemplate.send(KafkaTopics.RUN_READY, runId.toString(), new RunReady(runId));
         }
     }
 

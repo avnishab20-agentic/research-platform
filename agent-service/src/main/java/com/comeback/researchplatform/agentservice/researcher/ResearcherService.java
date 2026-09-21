@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -30,6 +31,7 @@ import java.util.stream.Collectors;
  * failed run is published, never silently dropped" (CLAUDE.md).
  */
 @Service
+@Profile("RESEARCHER")
 public class ResearcherService {
 
     private static final Logger log = LoggerFactory.getLogger(ResearcherService.class);

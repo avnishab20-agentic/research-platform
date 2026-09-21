@@ -5,6 +5,7 @@ import com.comeback.researchplatform.common.ResearchFinding;
 import com.comeback.researchplatform.common.ResearchSubtask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
  * PLAN's "6 researchers run in parallel" done-when for Week 2.
  */
 @Component
+@Profile("RESEARCHER")
 public class ResearchSubtaskListener {
 
     private static final Logger log = LoggerFactory.getLogger(ResearchSubtaskListener.class);

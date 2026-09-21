@@ -1,6 +1,15 @@
 spring:
   application:
     name: agent-service
+  profiles:
+    # CLAUDE.md: "Agent types are Spring profiles of agent-service, not
+    # separate deployables." All three active together here because this
+    # project runs one agent-service JVM locally (no Kubernetes yet -- Week
+    # 5). In production each pod would set SPRING_PROFILES_ACTIVE to just
+    # one role, scaled independently by KEDA; this default is only the
+    # local-dev shape. Override with an env var, never edit this for a
+    # single-role run.
+    active: RESEARCHER,WRITER,CRITIC
   datasource:
     url: jdbc:postgresql://localhost:5432/research
     username: research
@@ -57,12 +66,14 @@ spring:
         # an attacker could write to. common is the only package these
         # messages ever come from.
         spring.json.trusted.packages: com.comeback.researchplatform.common
-        # research.subtasks only ever carries ResearchSubtask. Pinning a
-        # default type (and ignoring the __TypeId__ header) means this works
-        # whether the producer is Spring's JsonSerializer or anything else
-        # that writes plain JSON to the topic -- a header isn't guaranteed.
-        spring.json.value.default.type: com.comeback.researchplatform.common.ResearchSubtask
-        spring.json.use.type.headers: false
+        # Week 3: agent-service now consumes two different message types
+        # (ResearchSubtask on research.subtasks, RunReady on run.ready), so a
+        # single default.type no longer works -- it doesn't vary per topic.
+        # Switched to header-based resolution (Spring's default): both real
+        # producers (control-plane's planner and fan-in) use JsonSerializer,
+        # which always stamps a __TypeId__ header, so this is reliable for
+        # actual traffic. Only breaks for a hand-crafted test message with no
+        # header -- publish through a real Spring producer to test instead.
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

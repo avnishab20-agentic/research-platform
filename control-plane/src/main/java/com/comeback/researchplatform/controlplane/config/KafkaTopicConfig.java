@@ -35,4 +35,16 @@ public class KafkaTopicConfig {
     public NewTopic agentEvents() {
         return TopicBuilder.name(KafkaTopics.AGENT_EVENTS).partitions(3).replicas(1).build();
     }
+
+    // Week 3: one message per completed run, not per sub-question -- low
+    // traffic, 3 partitions is plenty.
+    @Bean
+    public NewTopic runReady() {
+        return TopicBuilder.name(KafkaTopics.RUN_READY).partitions(3).replicas(1).build();
+    }
+
+    @Bean
+    public NewTopic claimsReady() {
+        return TopicBuilder.name(KafkaTopics.CLAIMS_READY).partitions(3).replicas(1).build();
+    }
 }
