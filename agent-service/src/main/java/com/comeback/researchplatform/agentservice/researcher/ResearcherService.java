@@ -207,7 +207,11 @@ public class ResearcherService {
         }
     }
 
-    private double confidenceFor(List<SourceRef> sources) {
+    // Package-visible (not private) so ResearcherServiceTest can exercise this
+    // pure decision logic directly -- ChatClient/RetrievalClient/PassageStore
+    // are all real Spring AI/HTTP client fluent APIs, expensive and brittle to
+    // mock end-to-end for what's actually being tested here: the arithmetic.
+    double confidenceFor(List<SourceRef> sources) {
         if (sources.isEmpty()) {
             return 0.0;
         }

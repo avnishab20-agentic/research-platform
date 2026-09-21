@@ -192,7 +192,9 @@ public class CriticService {
         // verify() -- never silently ungraded.
     }
 
-    private double unsupportedRatio(Collection<Verdict> verdicts) {
+    // Package-visible so CriticServiceTest can exercise this pure arithmetic
+    // directly, same reasoning as ResearcherService.confidenceFor.
+    double unsupportedRatio(Collection<Verdict> verdicts) {
         if (verdicts.isEmpty()) {
             return 0.0;
         }
