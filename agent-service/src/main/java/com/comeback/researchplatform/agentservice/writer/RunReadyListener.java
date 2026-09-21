@@ -16,7 +16,9 @@ public class RunReadyListener {
         this.writerService = writerService;
     }
 
-    @KafkaListener(topics = KafkaTopics.RUN_READY)
+    // See ResearchSubtaskListener's comment: each listener needs its own
+    // consumer group, not a shared global default.
+    @KafkaListener(topics = KafkaTopics.RUN_READY, groupId = "agent-service-writer")
     public void onRunReady(RunReady runReady) {
         writerService.write(runReady.runId());
     }

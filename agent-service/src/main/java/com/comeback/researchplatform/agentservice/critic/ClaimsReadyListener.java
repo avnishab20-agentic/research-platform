@@ -16,7 +16,9 @@ public class ClaimsReadyListener {
         this.criticService = criticService;
     }
 
-    @KafkaListener(topics = KafkaTopics.CLAIMS_READY)
+    // See ResearchSubtaskListener's comment: each listener needs its own
+    // consumer group, not a shared global default.
+    @KafkaListener(topics = KafkaTopics.CLAIMS_READY, groupId = "agent-service-critic")
     public void onClaimsReady(ClaimsReady claimsReady) {
         criticService.verify(claimsReady.runId());
     }

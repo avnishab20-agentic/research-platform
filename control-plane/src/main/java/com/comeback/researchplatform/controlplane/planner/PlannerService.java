@@ -75,7 +75,14 @@ public class PlannerService {
 
         for (int i = 0; i < nodeIds.size(); i++) {
             ResearchSubtask subtask = new ResearchSubtask(runId, nodeIds.get(i), 0, subQuestions.get(i));
-            kafkaTemplate.send(KafkaTopics.RESEARCH_SUBTASKS, runId.toString(), subtask);
+            // Keyed by nodeId, not runId -- same key always hashes to the same
+            // partition, so keying by runId would put all of one run's
+            // sub-questions on one partition, letting only one of the 6
+            // consumer threads ever work on them (found live: 8 subtasks all
+            // landed on partition 6, ran sequentially, blew the 3-minute
+            // deadline). nodeId spreads them across all 12 partitions so they
+            // actually run in parallel, which is the entire point of Week 2.
+            kafkaTemplate.send(KafkaTopics.RESEARCH_SUBTASKS, nodeIds.get(i).toString(), subtask);
         }
 
         log.info("Run {} planned: {} sub-questions fanned out", runId, nodeIds.size());

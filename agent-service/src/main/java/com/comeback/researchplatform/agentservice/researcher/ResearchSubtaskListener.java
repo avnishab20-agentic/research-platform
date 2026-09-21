@@ -31,7 +31,12 @@ public class ResearchSubtaskListener {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    @KafkaListener(topics = KafkaTopics.RESEARCH_SUBTASKS)
+    // Explicit groupId, not the global spring.kafka.consumer.group-id --
+    // found live that sharing one group id across listeners subscribed to
+    // different topics sends the classic RangeAssignor into an endless
+    // rebalance loop (heterogeneous subscriptions within one group never
+    // reach a stable assignment). Each listener now owns its own group.
+    @KafkaListener(topics = KafkaTopics.RESEARCH_SUBTASKS, groupId = "agent-service-researcher")
     public void onSubtask(ResearchSubtask subtask) {
         log.info("Researching sub-question '{}' (run {})", subtask.subQuestion(), subtask.runId());
         ResearchFinding finding = researcherService.research(subtask);
