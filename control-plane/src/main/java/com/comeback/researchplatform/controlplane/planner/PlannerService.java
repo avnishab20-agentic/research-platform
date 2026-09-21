@@ -47,6 +47,11 @@ public class PlannerService {
     public UUID submit(String question) {
         UUID runId = UUID.randomUUID();
         jdbc.update("INSERT INTO runs (id, question, status) VALUES (?, ?, 'RUNNING')", runId, question);
+        // Row must exist before any Kafka consumer could possibly try to
+        // increment it -- created here, in the same transaction, before the
+        // planner's own LLM call. llm_calls starts at 1: this decompose()
+        // call is itself one of the run's LLM calls.
+        jdbc.update("INSERT INTO run_usage (run_id, searches, llm_calls) VALUES (?, 0, 1)", runId);
 
         List<String> subQuestions = decompose(question);
         if (subQuestions.isEmpty()) {

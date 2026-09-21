@@ -1,5 +1,6 @@
 package com.comeback.researchplatform.agentservice.writer;
 
+import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.common.KafkaTopics;
 import com.comeback.researchplatform.common.ClaimsReady;
 import com.comeback.researchplatform.common.ResearchFinding;
@@ -39,13 +40,16 @@ public class WriterService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RunUsageGuard runUsageGuard;
 
     public WriterService(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc,
-                          ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate) {
+                          ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
+                          RunUsageGuard runUsageGuard) {
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
+        this.runUsageGuard = runUsageGuard;
     }
 
     @Transactional
@@ -117,6 +121,9 @@ public class WriterService {
     }
 
     private List<ExtractedClaim> extractClaims(ResearchFinding finding) {
+        if (!runUsageGuard.tryLlmCall(finding.runId())) {
+            return List.of();
+        }
         String sourceList = finding.sources().stream()
                 .map(s -> s.url() + " (tier " + s.tier() + ")")
                 .collect(Collectors.joining("\n"));

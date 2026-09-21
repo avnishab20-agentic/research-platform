@@ -2,6 +2,7 @@ package com.comeback.researchplatform.agentservice.researcher;
 
 import com.comeback.researchplatform.agentservice.config.ResearcherProperties;
 import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
+import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
@@ -52,16 +53,19 @@ public class ResearcherService {
     private final ResearcherProperties props;
     private final FixtureIO fixtureIO;
     private final boolean recordMode;
+    private final RunUsageGuard runUsageGuard;
 
     public ResearcherService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                               PassageStore passageStore, ResearcherProperties props, FixtureIO fixtureIO,
-                              @Value("${fixtures.record-mode:false}") boolean recordMode) {
+                              @Value("${fixtures.record-mode:false}") boolean recordMode,
+                              RunUsageGuard runUsageGuard) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
         this.props = props;
         this.fixtureIO = fixtureIO;
         this.recordMode = recordMode;
+        this.runUsageGuard = runUsageGuard;
     }
 
     // Inline, not a ChatModel decorator -- found live that wrapping ChatModel
@@ -82,13 +86,13 @@ public class ResearcherService {
         Budget budget = new Budget(props.tokenBudget());
 
         // Step 1: generate search queries.
-        List<String> queries = generateQueries(subtask.subQuestion(), budget);
+        List<String> queries = generateQueries(subtask.runId(), subtask.subQuestion(), budget);
         if (queries.isEmpty() || overBudget(start)) {
             return partial(subtask, "Could not generate search queries in time.", List.of());
         }
 
         // Steps 2-3: search, dedupe, tier filtering happens server-side via minTier.
-        List<SearchResult> results = search(queries);
+        List<SearchResult> results = search(subtask.runId(), queries);
         if (overBudget(start)) {
             return partial(subtask, "Search budget/time exceeded before extraction.", List.of());
         }
@@ -114,7 +118,7 @@ public class ResearcherService {
         }
 
         // Step 6: synthesize an answer grounded only in the retrieved passages.
-        String answer = synthesizeAnswer(subtask.subQuestion(), passages, budget);
+        String answer = synthesizeAnswer(subtask.runId(), subtask.subQuestion(), passages, budget);
         boolean unanswerable = answer != null && answer.trim().equals(UNANSWERABLE);
         boolean partial = overBudget(start) || budget.exceeded() || answer == null || unanswerable;
 
@@ -147,8 +151,8 @@ public class ResearcherService {
                 finalAnswer, sources, confidence, partial ? STATUS_PARTIAL : STATUS_COMPLETE);
     }
 
-    private List<String> generateQueries(String subQuestion, Budget budget) {
-        if (budget.exceeded()) {
+    private List<String> generateQueries(UUID runId, String subQuestion, Budget budget) {
+        if (budget.exceeded() || !runUsageGuard.tryLlmCall(runId)) {
             return List.of();
         }
         String system = "You generate web search queries. Reply with one query per line, "
@@ -178,7 +182,10 @@ public class ResearcherService {
         }
     }
 
-    private List<SearchResult> search(List<String> queries) {
+    private List<SearchResult> search(UUID runId, List<String> queries) {
+        if (!runUsageGuard.trySearch(runId)) {
+            return List.of();
+        }
         try {
             return retrievalClient.search(queries, props.maxDocumentsToExtract() * 2, null, 4)
                     .results().stream()
@@ -207,8 +214,8 @@ public class ResearcherService {
         }
     }
 
-    private String synthesizeAnswer(String subQuestion, List<Document> passages, Budget budget) {
-        if (budget.exceeded()) {
+    private String synthesizeAnswer(UUID runId, String subQuestion, List<Document> passages, Budget budget) {
+        if (budget.exceeded() || !runUsageGuard.tryLlmCall(runId)) {
             return null;
         }
         String context = passages.stream()

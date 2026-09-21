@@ -2,6 +2,7 @@ package com.comeback.researchplatform.agentservice.researcher;
 
 import com.comeback.researchplatform.agentservice.config.ResearcherProperties;
 import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
+import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.common.SourceRef;
@@ -27,7 +28,7 @@ class ResearcherServiceTest {
     private final ResearcherService service = new ResearcherService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
             new ResearcherProperties(Duration.ofSeconds(90), 25000, 5, 5, 6),
-            mock(FixtureIO.class), false);
+            mock(FixtureIO.class), false, mock(RunUsageGuard.class));
 
     @Test
     void tier1SourceScoresHighestConfidence() {

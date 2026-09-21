@@ -1,5 +1,6 @@
 package com.comeback.researchplatform.agentservice.critic;
 
+import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
@@ -45,14 +46,17 @@ public class CriticService {
     private final PassageStore passageStore;
     private final JdbcTemplate jdbc;
     private final CriticProperties props;
+    private final RunUsageGuard runUsageGuard;
 
     public CriticService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
-                          PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props) {
+                          PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
+                          RunUsageGuard runUsageGuard) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
         this.jdbc = jdbc;
         this.props = props;
+        this.runUsageGuard = runUsageGuard;
     }
 
     @Transactional
@@ -160,7 +164,7 @@ public class CriticService {
             prompt.append("\n");
         }
 
-        if (gradable.isEmpty()) {
+        if (gradable.isEmpty() || !runUsageGuard.tryLlmCall(runId)) {
             return;
         }
 

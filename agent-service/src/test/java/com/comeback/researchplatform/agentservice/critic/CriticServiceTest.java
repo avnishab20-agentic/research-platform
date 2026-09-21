@@ -1,5 +1,6 @@
 package com.comeback.researchplatform.agentservice.critic;
 
+import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.common.Verdict;
@@ -23,7 +24,7 @@ class CriticServiceTest {
 
     private final CriticService service = new CriticService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
-            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15));
+            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15), mock(RunUsageGuard.class));
 
     @Test
     void allSupportedGivesZeroRatio() {
