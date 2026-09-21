@@ -36,7 +36,13 @@ public class FixtureIO {
     private final String sourceDir;
 
     public FixtureIO(ObjectMapper objectMapper,
-                      @Value("${fixtures.record-dir:agent-service/src/main/resources/fixtures/}") String sourceDir) {
+                      // Relative to the process's actual working directory, which for
+                      // `mvn -pl agent-service spring-boot:run` is the agent-service
+                      // module's own directory, not the repo root -- found live: a
+                      // wrong "agent-service/..." prefix here created a wrongly
+                      // double-nested agent-service/agent-service/src/... tree instead
+                      // of writing to the real source folder.
+                      @Value("${fixtures.record-dir:src/main/resources/fixtures/}") String sourceDir) {
         this.objectMapper = objectMapper;
         this.sourceDir = sourceDir;
     }

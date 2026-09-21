@@ -18,7 +18,14 @@ quota:
 
 extractor:
   base-url: http://localhost:8000
-  max-document-bytes: 204800
+  # Raised from 200KB (Session 14 flagged this: "Wikipedia is 1.07MB...
+  # TOO_LARGE will be common in practice, not exceptional"). Confirmed live
+  # today: every single sub-question across several real questions
+  # (population, inflation, financial crisis) lost its top-tier Wikipedia
+  # source to this cap, degrading otherwise-answerable questions to
+  # PARTIAL. 2MB comfortably covers real encyclopedia/news pages while
+  # still rejecting genuinely pathological ones.
+  max-document-bytes: 2097152
   cache-ttl: 7d
   connect-timeout: 5s
   read-timeout: 10s

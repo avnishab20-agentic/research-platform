@@ -1,6 +1,7 @@
 package com.comeback.researchplatform.agentservice.researcher;
 
 import com.comeback.researchplatform.agentservice.config.ResearcherProperties;
+import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
@@ -48,13 +50,31 @@ public class ResearcherService {
     private final RetrievalClient retrievalClient;
     private final PassageStore passageStore;
     private final ResearcherProperties props;
+    private final FixtureIO fixtureIO;
+    private final boolean recordMode;
 
     public ResearcherService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
-                              PassageStore passageStore, ResearcherProperties props) {
+                              PassageStore passageStore, ResearcherProperties props, FixtureIO fixtureIO,
+                              @Value("${fixtures.record-mode:false}") boolean recordMode) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
         this.props = props;
+        this.fixtureIO = fixtureIO;
+        this.recordMode = recordMode;
+    }
+
+    // Inline, not a ChatModel decorator -- found live that wrapping ChatModel
+    // as a @Primary bean broke Spring AI's internal OpenAiChatOptions casting
+    // (see docs/progress for the ClassCastException this caused). A plain
+    // post-call side effect at the two spots that already hold a real
+    // ChatResponse has no such risk -- same pattern HttpRetrievalClient's
+    // recording already uses successfully.
+    private void recordChat(String promptText, ChatResponse response) {
+        if (recordMode) {
+            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(promptText),
+                    response.getResult().getOutput().getText());
+        }
     }
 
     public ResearchFinding research(ResearchSubtask subtask) {
@@ -131,15 +151,18 @@ public class ResearcherService {
         if (budget.exceeded()) {
             return List.of();
         }
+        String system = "You generate web search queries. Reply with one query per line, "
+                + "no numbering, no extra text.";
+        String user = "Generate " + props.maxSearchQueries()
+                + " diverse search queries to research this question: " + subQuestion;
         try {
             ChatResponse response = chatClient.prompt()
-                    .system("You generate web search queries. Reply with one query per line, "
-                            + "no numbering, no extra text.")
-                    .user("Generate " + props.maxSearchQueries()
-                            + " diverse search queries to research this question: " + subQuestion)
+                    .system(system)
+                    .user(user)
                     .call()
                     .chatResponse();
             budget.record(response);
+            recordChat(system + "\n---\n" + user, response);
             String text = response.getResult().getOutput().getText();
             if (text == null) {
                 return List.of();
@@ -191,15 +214,18 @@ public class ResearcherService {
         String context = passages.stream()
                 .map(p -> "Source: " + p.getMetadata().get("sourceUrl") + "\n" + p.getText())
                 .collect(Collectors.joining("\n\n---\n\n"));
+        String system = "Answer the research question using only the provided passages. "
+                + "Do not use outside knowledge. If the passages don't answer the "
+                + "question, reply with exactly this and nothing else: " + UNANSWERABLE;
+        String user = "Question: " + subQuestion + "\n\nPassages:\n" + context;
         try {
             ChatResponse response = chatClient.prompt()
-                    .system("Answer the research question using only the provided passages. "
-                            + "Do not use outside knowledge. If the passages don't answer the "
-                            + "question, reply with exactly this and nothing else: " + UNANSWERABLE)
-                    .user("Question: " + subQuestion + "\n\nPassages:\n" + context)
+                    .system(system)
+                    .user(user)
                     .call()
                     .chatResponse();
             budget.record(response);
+            recordChat(system + "\n---\n" + user, response);
             return response.getResult().getOutput().getText();
         } catch (Exception e) {
             log.warn("Answer synthesis failed for sub-question '{}'", subQuestion, e);
