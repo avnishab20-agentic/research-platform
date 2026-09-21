@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: control-plane
+  datasource:
+    url: jdbc:postgresql://localhost:5432/research
+    username: research
+    password: research
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: control-plane
+      auto-offset-reset: earliest
+      max-poll-records: 1
+      properties:
+        max.poll.interval.ms: 600000
+    listener:
+      concurrency: 6
+
+server:
+  port: 8083

@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: agent-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/research
+    username: research
+    password: research
+  ai:
+    vectorstore:
+      pgvector:
+        # Flyway (control-plane's V2 migration) owns this table, not Spring AI's
+        # own schema init -- matches "Flyway migration first... never ddl-auto".
+        initialize-schema: false
+        dimensions: 384
+  threads:
+    virtual:
+      enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: agent-service
+      auto-offset-reset: earliest
+      # One record per poll: a researcher subtask can run up to 90s, so pulling
+      # a batch would starve every other subtask on the same partition until
+      # the whole batch finishes.
+      max-poll-records: 1
+      properties:
+        # Default is 5 min. Research subtasks exceed it, the consumer gets
+        # evicted mid-work, and work silently duplicates with no error -- see
+        # CLAUDE.md "Traps that have already cost time".
+        max.poll.interval.ms: 600000
+    listener:
+      # research.subtasks has 12 partitions; 6 concurrent listener threads is
+      # the PLAN Week 2 number for parallel researchers.
+      concurrency: 6
+
+server:
+  port: 8082
