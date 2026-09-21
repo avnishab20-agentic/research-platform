@@ -91,6 +91,18 @@ tissue only — no facts. Free prose with footnotes makes verification impossibl
 **The Critic re-fetches sources and stores the matched evidence passage**, not just
 a verdict. The passage is what makes the verdict checkable.
 
+**Passage selection is RAG, shared by the Researcher and the Critic.** Chunk
+extracted documents, embed them once (`spring-ai-starter-model-transformers` — a
+local ONNX model, not a paid API: no new key, $0, deterministic output, which
+matters because Week 4's evals must run on fixture mode for free), store the
+vectors in `pgvector` (`spring-ai-starter-vector-store-pgvector`), then retrieve
+top-k by cosine similarity. The Researcher retrieves against the sub-question
+text before Sonnet synthesizes an answer (replacing a per-source Haiku call in
+the original plan with a vector search); the Critic retrieves against a claim's
+text before grading it. One shared chunk/embed/retrieve utility, two call sites.
+Added 2026-09-21, explicitly for interview value — RAG comes up constantly and
+the project had the pgvector/embedding pieces half-built already.
+
 **Guardrails are configuration, not code paths.** Every limit — call budgets, timeouts,
 document caps, fan-out caps, unsupported-ratio thresholds, eval pass marks — is a number
 in one `guardrails:` tree bound to a single record in `common/`. Never a hardcoded

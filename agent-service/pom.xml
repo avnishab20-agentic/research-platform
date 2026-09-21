@@ -27,8 +27,25 @@
     </scm>
     <properties>
         <java.version>21</java.version>
+        <spring-ai.version>1.0.3</spring-ai.version>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <dependencies>
+        <dependency>
+            <groupId>com.comeback.researchplatform</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
@@ -37,10 +54,43 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- Anthropic Haiku/Sonnet chat model -->
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-anthropic</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Local ONNX embedding model (all-MiniLM-L6-v2), no API key, $0 cost,
+                 deterministic - what fixture-mode evals need. -->
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-transformers</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

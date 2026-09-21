@@ -140,6 +140,82 @@ to mention unprompted.
 
 ---
 
+## RAG (Retrieval-Augmented Generation)
+
+### Chunk → embed → retrieve, shared by the Researcher and the Critic
+**Built in:** `agent-service`, week 2 (Researcher) and week 3 (Critic)
+**Instead of:** an extra LLM call per source to find the relevant passage
+
+> "Walk me through how you'd build RAG over a set of documents."
+
+The three steps, and why each exists:
+
+1. **Chunk** — split each extracted article into paragraph-sized pieces. Too
+   large a chunk and the embedding blurs together multiple unrelated ideas
+   ("diluted" — the vector ends up an average of several topics, matching
+   none of them well); too small and you lose surrounding context a claim
+   needs to make sense.
+2. **Embed** — turn each chunk into a fixed-length vector (a list of floats)
+   such that semantically similar text produces geometrically nearby
+   vectors. This project uses a local ONNX model
+   (`spring-ai-starter-model-transformers`, all-MiniLM-L6-v2 under the hood)
+   instead of a paid embeddings API. That's a deliberate tradeoff, not just
+   the lazy option — see the follow-up below.
+3. **Retrieve** — embed the query (a sub-question, or a claim's text) the
+   same way, then rank stored chunks by cosine similarity and take the
+   top-k. `pgvector` does the nearest-neighbor search inside Postgres, so
+   there's no separate vector database to run or reason about.
+
+**Two call sites, one utility:** the Researcher retrieves relevant passages
+for a sub-question before asking Sonnet to synthesize an answer; the Critic
+retrieves the passage closest to a specific claim before grading it
+SUPPORTED/PARTIAL/UNSUPPORTED/CONTRADICTED/UNREACHABLE. Same chunk/embed/
+retrieve code, two different queries fed into it. That's worth saying
+explicitly in an interview — it shows you can see the general pattern
+underneath two features that don't look alike on the surface.
+
+**Follow-up you'll get: "Why cosine similarity and not Euclidean distance?"**
+Cosine similarity measures the *angle* between two vectors, ignoring their
+magnitude — so a short chunk and a long chunk about the same topic still
+score as similar, even though the long one's vector has a larger raw
+magnitude. Euclidean distance would penalize that length difference as if
+it were a difference in meaning.
+
+**Follow-up: "Why not just use OpenAI/Voyage embeddings?"** A paid API
+means a new account, a new key, per-call cost, and a network dependency —
+none of which is acceptable for this project's Week 4 evals, which have to
+run on fixture mode and cost exactly $0. A local model also returns the
+*same* vector for the same input every time, which a hosted model doesn't
+strictly guarantee across versions — determinism matters when an eval's
+pass/fail has to be reproducible. The honest tradeoff to name if asked:
+local embeddings are lower quality than a large hosted model, and adding
+Voyage/OpenAI later is a one-line Spring AI config swap, not a rewrite —
+the `VectorStore`/`EmbeddingModel` interfaces are what make that painless.
+
+**Follow-up: "How do you keep one run's documents from polluting another
+run's search results?"** Every stored chunk is tagged with the `runId` it
+came from, and retrieval always filters on it. Without that, sub-question 3
+of run A could retrieve a passage fetched for run B — wrong answer, and a
+subtle one, since nothing throws an error.
+
+### RAG vs fine-tuning vs long-context stuffing
+**Not built, but you'll be asked**
+
+> "Why RAG instead of just fine-tuning the model on your documents, or
+> pasting everything into a long-context window?"
+
+Fine-tuning bakes facts into model *weights* — expensive to update (retrain
+for every new article), and the model can still hallucinate a fact that
+sounds like something it was trained on. RAG keeps facts in an external,
+inspectable store and retrieves fresh at query time — an article changes,
+you re-embed it, no retraining. Long-context stuffing (pasting all 30
+articles into one huge prompt) burns tokens on mostly-irrelevant text and
+still buries the right sentence in noise; retrieval is what narrows 30
+articles down to the 3 paragraphs that actually matter for *this*
+sub-question.
+
+---
+
 ## Theory the project does NOT teach
 
 Read these separately — building this won't cover them:
