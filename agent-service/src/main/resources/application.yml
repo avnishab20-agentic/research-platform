@@ -96,5 +96,12 @@ researcher:
   max-documents-to-extract: 5
   passages-per-query: 6
 
+critic:
+  # PLAN's numbers: batch 10 claims per grading call, top-3 passages by
+  # cosine, 0.15 unsupported-ratio threshold.
+  batch-size: 10
+  top-k-passages: 3
+  unsupported-ratio-threshold: 0.15
+
 server:
   port: 8082
