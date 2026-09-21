@@ -22,6 +22,7 @@ extractor:
   cache-ttl: 7d
   connect-timeout: 5s
   read-timeout: 10s
+  max-concurrent-extractions: 4
 
 rate-limit:
   capacity: 3

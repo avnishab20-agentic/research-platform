@@ -32,7 +32,7 @@ class PageFetcherTest {
         server = MockRestServiceServer.bindTo(builder).build();
         ExtractProperties props = new ExtractProperties(
                 "http://localhost:8000", MAX_BYTES,
-                Duration.ofDays(7), Duration.ofSeconds(5), Duration.ofSeconds(10));
+                Duration.ofDays(7), Duration.ofSeconds(5), Duration.ofSeconds(10), 4);
         fetcher = new PageFetcher(builder.build(), props);
     }
 

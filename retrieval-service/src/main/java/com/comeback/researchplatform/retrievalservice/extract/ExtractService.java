@@ -19,12 +19,13 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /**
  * Cache-aside around fetch + extract, one URL per virtual thread.
  * <p>
- * The single-flight lock and the extractor {@code Semaphore(4)} are PLAN Session 4
- * and land later.
+ * Fetch and cache reads run fully parallel; only the sidecar call is gated by a
+ * {@link Semaphore} so a 50-URL batch cannot hit single-process uvicorn 50-wide.
  */
 @Service
 public class ExtractService {
@@ -39,6 +40,7 @@ public class ExtractService {
     private final Duration cacheTtl;
     private final RateLimitProperties rateLimitProperties;
     private final DomainRateLimiter domainRateLimiter;
+    private final Semaphore extractorPermits;
 
     public ExtractService(PageFetcher pageFetcher,
                           ExtractorClient extractorClient,
@@ -56,6 +58,7 @@ public class ExtractService {
         this.cacheTtl = props.cacheTtl();
         this.rateLimitProperties = rateLimitProperties;
         this.domainRateLimiter = domainRateLimiter;
+        this.extractorPermits = new Semaphore(props.maxConcurrentExtractions());
     }
 
     public ExtractResponse extract(ExtractRequest request) {
@@ -98,7 +101,17 @@ public class ExtractService {
 
         ExtractorResult result;
         try {
-            result = extractorClient.extract(url, page.html());
+            extractorPermits.acquire();
+            try {
+                result = extractorClient.extract(url, page.html());
+            } finally {
+                // In finally so a sidecar exception can't leak a permit; leak four and
+                // every later extraction blocks forever.
+                extractorPermits.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Document(url, null, sourceTierResolver.resolveTier(url), "UNREACHABLE");
         } catch (Exception e) {
             // The sidecar being down is our outage, not the page's. Don't cache it.
             // Logged because the returned status can't distinguish it from a dead page.

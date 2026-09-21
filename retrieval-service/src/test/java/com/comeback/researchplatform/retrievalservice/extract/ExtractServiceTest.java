@@ -70,7 +70,7 @@ class ExtractServiceTest {
                 List.of("*.blogspot.*")));
 
         ExtractProperties props = new ExtractProperties(
-                "http://localhost:8000", 204800, TTL, Duration.ofSeconds(5), Duration.ofSeconds(10));
+                "http://localhost:8000", 204800, TTL, Duration.ofSeconds(5), Duration.ofSeconds(10), 4);
 
         rateLimiter = mock(DomainRateLimiter.class);
         // Default: the domain is never busy. The tests that care about refusal say so.
