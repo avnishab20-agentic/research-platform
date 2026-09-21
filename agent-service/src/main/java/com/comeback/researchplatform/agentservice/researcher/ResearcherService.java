@@ -35,6 +35,12 @@ public class ResearcherService {
     private static final Logger log = LoggerFactory.getLogger(ResearcherService.class);
     private static final String STATUS_COMPLETE = "COMPLETE";
     private static final String STATUS_PARTIAL = "PARTIAL";
+    // A fixed marker rather than sniffing free-form prose for phrases like
+    // "cannot be answered" -- deterministic, and it's what let a real bug
+    // slip through live: the model correctly declining to answer, but
+    // confidenceFor() still scoring it 0.95 because it only ever looked at
+    // source tier, never at whether an answer was actually given.
+    private static final String UNANSWERABLE = "UNANSWERABLE";
 
     private final ChatClient chatClient;
     private final RetrievalClient retrievalClient;
@@ -87,11 +93,14 @@ public class ResearcherService {
 
         // Step 6: synthesize an answer grounded only in the retrieved passages.
         String answer = synthesizeAnswer(subtask.subQuestion(), passages, budget);
-        boolean partial = overBudget(start) || budget.exceeded() || answer == null;
+        boolean unanswerable = answer != null && answer.trim().equals(UNANSWERABLE);
+        boolean partial = overBudget(start) || budget.exceeded() || answer == null || unanswerable;
 
         // Step 7: confidence from the best tier actually cited -- code, not
         // another LLM call. Tier 1-2 support = high confidence; tier 3-4 only
-        // = downgraded, per PLAN's "downgrade if only tier 3-4 support".
+        // = downgraded, per PLAN's "downgrade if only tier 3-4 support". Zero
+        // regardless of tier when the model declined to answer -- a source
+        // being trustworthy says nothing about an answer that wasn't given.
         Set<String> citedUrls = passages.stream()
                 .map(p -> (String) p.getMetadata().get("sourceUrl"))
                 .collect(Collectors.toSet());
@@ -100,12 +109,20 @@ public class ResearcherService {
                 .map(d -> new SourceRef(d.url(), d.tier()))
                 .distinct()
                 .toList();
-        double confidence = confidenceFor(sources);
+        double confidence = unanswerable ? 0.0 : confidenceFor(sources);
+
+        String finalAnswer;
+        if (answer == null) {
+            finalAnswer = "Unable to synthesize an answer within budget.";
+        } else if (unanswerable) {
+            finalAnswer = "The retrieved passages did not contain an answer to this question.";
+        } else {
+            finalAnswer = answer;
+        }
 
         return new ResearchFinding(
                 subtask.runId(), subtask.nodeId(), subtask.subQuestion(),
-                answer != null ? answer : "Unable to synthesize an answer within budget.",
-                sources, confidence, partial ? STATUS_PARTIAL : STATUS_COMPLETE);
+                finalAnswer, sources, confidence, partial ? STATUS_PARTIAL : STATUS_COMPLETE);
     }
 
     private List<String> generateQueries(String subQuestion, Budget budget) {
@@ -176,7 +193,7 @@ public class ResearcherService {
             ChatResponse response = chatClient.prompt()
                     .system("Answer the research question using only the provided passages. "
                             + "Do not use outside knowledge. If the passages don't answer the "
-                            + "question, say so plainly rather than guessing.")
+                            + "question, reply with exactly this and nothing else: " + UNANSWERABLE)
                     .user("Question: " + subQuestion + "\n\nPassages:\n" + context)
                     .call()
                     .chatResponse();

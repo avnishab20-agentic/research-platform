@@ -8,6 +8,15 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+  ai:
+    model:
+      chat: openai
+    openai:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-flash
   threads:
     virtual:
       enabled: true
@@ -17,10 +26,29 @@ spring:
       group-id: control-plane
       auto-offset-reset: earliest
       max-poll-records: 1
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         max.poll.interval.ms: 600000
+        spring.json.trusted.packages: com.comeback.researchplatform.common
+        # research.findings only ever carries ResearchFinding -- same
+        # reasoning as agent-service's subtask consumer (see its
+        # application.yml comment / docs/progress 2026-09-22 entry for the
+        # bug this avoids: without an explicit value-deserializer AND this
+        # default type, messages arrive as raw Strings and the listener
+        # can't convert them).
+        spring.json.value.default.type: com.comeback.researchplatform.common.ResearchFinding
+        spring.json.use.type.headers: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     listener:
       concurrency: 6
+
+planner:
+  min-fan-out: 6
+  max-fan-out: 8
+  level-deadline: 3m
 
 server:
   port: 8083
