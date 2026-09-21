@@ -13,8 +13,44 @@ source-tiers:
 searxng:
   base-url: http://localhost:8080
 
-quota:
-  daily-limit: 1000
+# The one shared guardrails: tree (CLAUDE.md/PLAN's config-tree spec) --
+# GuardrailProperties in common/ binds this. Only retrieval.quota-daily-limit
+# is actually wired to a real enforcement point so far (QuotaService); the
+# rest mirrors PLAN's shape and documents the intended numbers, ready for
+# the enforcement points ResearcherService/PlannerService/CriticService
+# still need to migrate onto.
+guardrails:
+  mode: ENFORCE   # ENFORCE | SHADOW -- SHADOW logs a breach and proceeds anyway
+
+  run:
+    max-wall-clock: 10m
+    max-searches: 40
+    max-llm-calls: 60
+    max-subquestions: 8
+    max-critic-rounds: 2
+    on-breach: PARTIAL
+
+  agent:
+    researcher:
+      max-wall-clock: 90s
+      max-tokens: 25000
+      max-searches: 5
+      on-breach: PARTIAL_LOW_CONFIDENCE
+
+  retrieval:
+    quota-daily-limit: 1000
+    per-domain-rps: 1
+    burst: 3
+    extractor-permits: 4
+    fetch-parallelism: 5
+    connect-timeout: 5s
+    read-timeout: 15s
+    max-document-bytes: 2097152
+    block-private-networks: true
+
+  eval:
+    min-catch-rate: 0.85
+    max-false-positive-rate: 0.10
 
 extractor:
   base-url: http://localhost:8000

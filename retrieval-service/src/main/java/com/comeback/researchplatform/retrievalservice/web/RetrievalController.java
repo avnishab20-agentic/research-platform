@@ -4,7 +4,10 @@ import com.comeback.researchplatform.retrievalservice.dto.*;
 import com.comeback.researchplatform.retrievalservice.extract.ExtractService;
 
 import com.comeback.researchplatform.retrievalservice.search.SearchService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.comeback.researchplatform.retrievalservice.quota.QuotaExceededException;
 import com.comeback.researchplatform.retrievalservice.quota.QuotaService;
 
 @RestController
@@ -33,5 +36,10 @@ public class RetrievalController {
     @GetMapping("/quota")
     public QuotaResponse quota(){
         return new QuotaResponse(quotaService.remaining());
+    }
+
+    @ExceptionHandler(QuotaExceededException.class)
+    public ResponseEntity<String> onQuotaExceeded(QuotaExceededException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(e.getMessage());
     }
 }

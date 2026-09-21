@@ -68,7 +68,9 @@ public class SearchService {
 
                 if (Boolean.TRUE.equals(stringRedisTemplate.opsForValue()
                         .setIfAbsent(lockKey, "1", LOCK_TTL))) {
-                    // We hold the lock: we are the one caller that pays.
+                    // We hold the lock: we are the one caller that pays. Checked before the
+                    // real fetch, not after -- a breach must stop the spend, not just count it.
+                    quotaService.checkBudget();
                     try {
                         queryResults = fetchAndCache(key, query);
                     } finally {
@@ -85,6 +87,7 @@ public class SearchService {
                     } else {
                         // Fail open. The holder crashed or overran; a duplicate fetch is a
                         // better outcome than returning nothing for this query.
+                        quotaService.checkBudget();
                         queryResults = fetchAndCache(key, query);
                         creditsSpent++;
                         quotaService.recordSpend();

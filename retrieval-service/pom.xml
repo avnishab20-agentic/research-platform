@@ -14,6 +14,11 @@
     <description>retrieval-service</description>
     <dependencies>
         <dependency>
+            <groupId>com.comeback.researchplatform</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>

@@ -13,4 +13,17 @@
 
       <artifactId>common</artifactId>
       <packaging>jar</packaging>
+
+      <!-- The one deliberate exception to this module's own "no Spring
+           annotations" README boundary: GuardrailProperties needs
+           @ConfigurationProperties to bind the shared guardrails: tree once,
+           here, instead of every service hand-duplicating the same record.
+           Plain spring-boot, not a starter - annotation types only, no
+           autoconfigure/web/data machinery gets pulled in. -->
+      <dependencies>
+          <dependency>
+              <groupId>org.springframework.boot</groupId>
+              <artifactId>spring-boot</artifactId>
+          </dependency>
+      </dependencies>
   </project>
