@@ -1,10 +1,12 @@
 package com.comeback.researchplatform.retrievalservice.extract;
 
 import com.comeback.researchplatform.retrievalservice.config.ExtractProperties;
+import com.comeback.researchplatform.retrievalservice.config.RateLimitProperties;
 import com.comeback.researchplatform.retrievalservice.config.SourceTierProperties;
 import com.comeback.researchplatform.retrievalservice.dto.Document;
 import com.comeback.researchplatform.retrievalservice.dto.ExtractRequest;
 import com.comeback.researchplatform.retrievalservice.dto.ExtractResponse;
+import com.comeback.researchplatform.retrievalservice.ratelimit.DomainRateLimiter;
 import com.comeback.researchplatform.retrievalservice.tier.SourceTierResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,10 +36,20 @@ class ExtractServiceTest {
     private static final Duration TTL = Duration.ofDays(7);
     private static final String URL = "https://thehindu.com/news/rbi";
 
+    /**
+     * Deliberately absurd: one token per millisecond. The wait between retries is derived
+     * from the refill rate, so a fast rate makes a 3-attempt wait finish in microseconds
+     * instead of 3 real seconds. Same trick as TokenBucket's injected clock — the test
+     * controls time rather than living through it.
+     */
+    private static final double FAST_REFILL = 1000.0;
+    private static final int MAX_WAIT_ATTEMPTS = 3;
+
     private PageFetcher pageFetcher;
     private ExtractorClient extractorClient;
     private ValueOperations<String, String> valueOps;
     private ObjectMapper objectMapper;
+    private DomainRateLimiter rateLimiter;
     private ExtractService extractService;
 
     @BeforeEach
@@ -57,10 +70,18 @@ class ExtractServiceTest {
                 List.of("*.blogspot.*")));
 
         ExtractProperties props = new ExtractProperties(
-                "http://localhost:8000", 204800, TTL, Duration.ofSeconds(5), Duration.ofSeconds(10));
+                "http://localhost:8000", 204800, TTL, Duration.ofSeconds(5), Duration.ofSeconds(10), 4);
+
+        rateLimiter = mock(DomainRateLimiter.class);
+        // Default: the domain is never busy. The tests that care about refusal say so.
+        when(rateLimiter.tryAcquire(anyString())).thenReturn(true);
+
+        RateLimitProperties rateLimitProperties =
+                new RateLimitProperties(3, FAST_REFILL, MAX_WAIT_ATTEMPTS);
 
         extractService = new ExtractService(
-                pageFetcher, extractorClient, tierResolver, redis, objectMapper, props);
+                pageFetcher, extractorClient, tierResolver, redis, objectMapper, props,
+                rateLimitProperties, rateLimiter);
     }
 
     private Document extractOne(String url) {
@@ -186,5 +207,103 @@ class ExtractServiceTest {
         verify(valueOps, org.mockito.Mockito.times(2)).get(keys.capture());
 
         assertThat(keys.getAllValues().get(0)).isEqualTo(keys.getAllValues().get(1));
+    }
+
+    // --- rate limiting -------------------------------------------------------------
+
+    @Test
+    void aCacheHitDoesNotSpendAToken() {
+        // The token bucket exists to be polite to the origin server. A cached document
+        // never touches the origin, so it must not consume that domain's budget —
+        // the same rule SearchService already follows with recordSpend().
+        Document cached = new Document(URL, "cached body", 2, "OK");
+        when(valueOps.get(anyString())).thenReturn(objectMapper.writeValueAsString(cached));
+
+        extractOne(URL);
+
+        verify(rateLimiter, never()).tryAcquire(anyString());
+    }
+
+    @Test
+    void aCacheMissSpendsATokenBeforeFetching() {
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(pageFetcher.fetch(URL)).thenReturn(new FetchedPage("<html>body</html>", "OK"));
+        when(extractorClient.extract(URL, "<html>body</html>"))
+                .thenReturn(new ExtractorResult(URL, "Title", "clean text", null, "OK"));
+
+        extractOne(URL);
+
+        verify(rateLimiter).tryAcquire(URL);
+    }
+
+    @Test
+    void aUrlThatNeverGetsATokenIsReportedAsRateLimitedAndNeverFetched() {
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(rateLimiter.tryAcquire(anyString())).thenReturn(false);
+
+        Document document = extractOne(URL);
+
+        assertThat(document.status()).isEqualTo("RATE_LIMITED");
+        assertThat(document.text()).isNull();
+        // The whole point of the limiter: the request must not reach the origin.
+        verify(pageFetcher, never()).fetch(anyString());
+    }
+
+    @Test
+    void aRateLimitedUrlIsNotCached() {
+        // Being throttled is a fact about this moment, not about the page. Caching it
+        // would blind us to a perfectly good article for seven days — same reasoning
+        // that keeps UNREACHABLE and TOO_LARGE out of the cache.
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(rateLimiter.tryAcquire(anyString())).thenReturn(false);
+
+        extractOne(URL);
+
+        verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
+    }
+
+    @Test
+    void aBusyDomainIsRetriedUntilATokenFreesUp() {
+        // Fail-fast would throw away a good URL to enforce a politeness limit. Two
+        // refusals then a token means the fetch still happens.
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(rateLimiter.tryAcquire(URL)).thenReturn(false, false, true);
+        when(pageFetcher.fetch(URL)).thenReturn(new FetchedPage("<html>body</html>", "OK"));
+        when(extractorClient.extract(URL, "<html>body</html>"))
+                .thenReturn(new ExtractorResult(URL, "Title", "clean text", null, "OK"));
+
+        Document document = extractOne(URL);
+
+        assertThat(document.status()).isEqualTo("OK");
+        verify(rateLimiter, times(3)).tryAcquire(URL);
+    }
+
+    @Test
+    void retryingStopsAtMaxWaitAttempts() {
+        // Without a cap, a permanently busy domain parks this thread forever.
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(rateLimiter.tryAcquire(anyString())).thenReturn(false);
+
+        extractOne(URL);
+
+        verify(rateLimiter, times(MAX_WAIT_ATTEMPTS)).tryAcquire(URL);
+    }
+
+    @Test
+    void oneRateLimitedUrlDoesNotSinkTheRestOfTheBatch() {
+        String other = "https://rbi.org.in/notification";
+        when(valueOps.get(anyString())).thenReturn(null);
+        when(rateLimiter.tryAcquire(URL)).thenReturn(false);
+        when(rateLimiter.tryAcquire(other)).thenReturn(true);
+        when(pageFetcher.fetch(other)).thenReturn(new FetchedPage("<html>body</html>", "OK"));
+        when(extractorClient.extract(other, "<html>body</html>"))
+                .thenReturn(new ExtractorResult(other, "Title", "clean text", null, "OK"));
+
+        ExtractResponse response =
+                extractService.extract(new ExtractRequest(List.of(URL, other)));
+
+        assertThat(response.documents()).hasSize(2);
+        assertThat(response.documents().get(0).status()).isEqualTo("RATE_LIMITED");
+        assertThat(response.documents().get(1).status()).isEqualTo("OK");
     }
 }

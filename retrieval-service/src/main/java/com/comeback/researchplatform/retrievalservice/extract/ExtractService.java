@@ -5,6 +5,10 @@ import com.comeback.researchplatform.retrievalservice.dto.Document;
 import com.comeback.researchplatform.retrievalservice.dto.ExtractRequest;
 import com.comeback.researchplatform.retrievalservice.dto.ExtractResponse;
 import com.comeback.researchplatform.retrievalservice.tier.SourceTierResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.comeback.researchplatform.retrievalservice.config.RateLimitProperties;
+import com.comeback.researchplatform.retrievalservice.ratelimit.DomainRateLimiter;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -12,15 +16,21 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 /**
- * Cache-aside around fetch + extract, one URL at a time.
+ * Cache-aside around fetch + extract, one URL per virtual thread.
  * <p>
- * Parallelism is deliberately absent here — {@code CompletableFuture} fan-out, the
- * per-domain token bucket and the single-flight lock are PLAN Session 4 and land later.
+ * Fetch and cache reads run fully parallel; only the sidecar call is gated by a
+ * {@link Semaphore} so a 50-URL batch cannot hit single-process uvicorn 50-wide.
  */
 @Service
 public class ExtractService {
+
+    private static final Logger log = LoggerFactory.getLogger(ExtractService.class);
 
     private final PageFetcher pageFetcher;
     private final ExtractorClient extractorClient;
@@ -28,27 +38,45 @@ public class ExtractService {
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
     private final Duration cacheTtl;
+    private final RateLimitProperties rateLimitProperties;
+    private final DomainRateLimiter domainRateLimiter;
+    private final Semaphore extractorPermits;
 
     public ExtractService(PageFetcher pageFetcher,
                           ExtractorClient extractorClient,
                           SourceTierResolver sourceTierResolver,
                           StringRedisTemplate redis,
                           ObjectMapper objectMapper,
-                          ExtractProperties props) {
+                          ExtractProperties props,
+                          RateLimitProperties rateLimitProperties,
+                          DomainRateLimiter domainRateLimiter) {
         this.pageFetcher = pageFetcher;
         this.extractorClient = extractorClient;
         this.sourceTierResolver = sourceTierResolver;
         this.redis = redis;
         this.objectMapper = objectMapper;
         this.cacheTtl = props.cacheTtl();
+        this.rateLimitProperties = rateLimitProperties;
+        this.domainRateLimiter = domainRateLimiter;
+        this.extractorPermits = new Semaphore(props.maxConcurrentExtractions());
     }
 
     public ExtractResponse extract(ExtractRequest request) {
-        List<Document> documents = new ArrayList<>();
-        for (String url : request.urls()) {
-            documents.add(extractOne(url));
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<CompletableFuture<Document>> futures = new ArrayList<>();
+            for (String url : request.urls()) {
+                futures.add(CompletableFuture
+                        .supplyAsync(() -> extractOne(url), executor)
+                        // extractOne is written not to throw, but Redis and Jackson can.
+                        // Without this, one throw fails the whole batch on join().
+                        .exceptionally(e -> {
+                            log.warn("extract failed for {}", url, e);
+                            return new Document(url, null, sourceTierResolver.resolveTier(url), "UNREACHABLE");
+                        }));
+            }
+            // Second pass on purpose: joining inside the submit loop would serialise it.
+            return new ExtractResponse(futures.stream().map(CompletableFuture::join).toList());
         }
-        return new ExtractResponse(documents);
     }
 
     private Document extractOne(String url) {
@@ -57,6 +85,11 @@ public class ExtractService {
         String cachedJson = redis.opsForValue().get(key);
         if (cachedJson != null) {
             return objectMapper.readValue(cachedJson, Document.class);
+        }
+
+        if (!awaitToken(url)) {
+            // Not cached: being throttled is a fact about this moment, not about the page.
+            return new Document(url, null, sourceTierResolver.resolveTier(url), "RATE_LIMITED");
         }
 
         FetchedPage page = pageFetcher.fetch(url);
@@ -68,9 +101,21 @@ public class ExtractService {
 
         ExtractorResult result;
         try {
-            result = extractorClient.extract(url, page.html());
+            extractorPermits.acquire();
+            try {
+                result = extractorClient.extract(url, page.html());
+            } finally {
+                // In finally so a sidecar exception can't leak a permit; leak four and
+                // every later extraction blocks forever.
+                extractorPermits.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Document(url, null, sourceTierResolver.resolveTier(url), "UNREACHABLE");
         } catch (Exception e) {
             // The sidecar being down is our outage, not the page's. Don't cache it.
+            // Logged because the returned status can't distinguish it from a dead page.
+            log.warn("extractor call failed for {}", url, e);
             return new Document(url, null, sourceTierResolver.resolveTier(url), "UNREACHABLE");
         }
         if (result == null) {
@@ -83,5 +128,33 @@ public class ExtractService {
         // OK and PAYWALLED are both stable observations about the page itself, so both cache.
         redis.opsForValue().set(key, objectMapper.writeValueAsString(document), cacheTtl);
         return document;
+    }
+    /**
+     * Waits for this domain's token bucket to hand over a token.
+     * <p>
+     * Waiting rather than failing fast: the limit exists to be polite to the origin, and
+     * dropping a good URL to enforce politeness makes the research worse for no gain. The
+     * attempt cap is what stops a permanently busy domain parking this thread forever.
+     */
+    private boolean awaitToken(String url) {
+        // How long one token takes to appear. Derived, not hardcoded: at refill-rate 0.5
+        // a token needs 2s, and a fixed 1s sleep would burn every attempt on nothing.
+        long waitMillis = (long) (1000 / rateLimitProperties.refillRate());
+
+        for (int attempt = 0; attempt < rateLimitProperties.maxWaitAttempts(); attempt++) {
+            if (domainRateLimiter.tryAcquire(url)) {
+                return true;
+            }
+            try {
+                Thread.sleep(waitMillis);
+            } catch (InterruptedException e) {
+                // An interrupt means "stop, we're shutting down". Swallowing it silently
+                // would leave this loop sleeping through the shutdown, so restore the flag
+                // and give up.
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
     }
 }

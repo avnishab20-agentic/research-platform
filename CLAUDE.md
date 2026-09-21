@@ -479,6 +479,61 @@ Estimated **~6.5 plan-hours** remaining (Lua ~2h, `CompletableFuture` ~2h, singl
 
 **Next session starts with:** bring Docker up first and live-verify `/extract` against the real sidecar (three sessions overdue; better to find surprises there before layering concurrency on top). Then the Redis Lua token bucket, then `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)`. The `SourceTierResolver` lowercase-ordering bug is a good 10-minute warm-up.
 
+
+### Session 13 (2026-09-03) — Lua token bucket, `SourceTierResolver` bug fixed
+**Done:**
+- **`SourceTierResolver` lowercase-ordering bug fixed** (found and left in Session 12). It stripped `www.` *before* lowercasing, so `WWW.TheHindu.com` kept its uppercase prefix and silently fell through to tier 3 instead of tier 2. Fix was to delegate to `UrlNormalizer.host(url)` — which also deleted the third copy of the host-extraction logic. `SourceTierResolverTest` gained a case pinning it (5 → 6 tests).
+- **Token bucket ported to a Redis Lua script** — PLAN Session 4 item 2, the one the in-memory `TokenBucket` explicitly did *not* satisfy. `scripts/token_bucket.lua` holds the same algorithm (capacity, fractional refill, `Math.min` idle cap, `>= 1.0` not `> 0`, backwards-clock clamp), and `DomainRateLimiter` loads it once via `DefaultRedisScript` and calls it by SHA.
+  - **Time comes from Redis (`TIME`), not the caller.** Every instance now shares one clock, so a JVM with drift can't corrupt a shared bucket. This is what the injected `LongSupplier` was standing in for.
+  - **The whole reason it's Lua:** Redis runs a script start-to-finish with nothing interleaved, so read-check-write is atomic. `synchronized` fixed the race inside one JVM; only the script fixes it across instances — which is exactly what Week 5's Kubernetes scaling would otherwise break.
+  - Key `EXPIRE` is `ceil(capacity / rate)`: past that point an untouched bucket has refilled to full, which is identical to a missing key, so the key carries no information and can go.
+- `TokenBucket` and `TokenBucketTest` (130 lines, 7 tests) **deleted** — the arithmetic moved into Lua and can no longer be reached from Java. `DomainRateLimiterTest` rewritten to cover what is still Java: which key a URL maps to, and the null-host refusal.
+- **Cost of that move, recorded honestly:** the refill/burst/idle-cap behaviour lost its tests. Nothing verified the Lua arithmetic until Session 14.
+
+**Next session starts with:** live-verifying the Lua script and `/extract` (both still unproven against real containers), then `CompletableFuture` fan-out, single-flight lock and `Semaphore(4)`.
+
+### Session 14 (2026-09-05/06) — Docker finally up: two live bugs found, `/extract` closed, rate limiter wired, console built
+**The overdue verification finally ran, and it was worth it — both things that had gone unverified were broken.**
+
+- **The Lua token bucket works.** First execution ever against a real Redis: burst of 3 allowed, calls 4 and 5 refused, a 2-second wait refilled exactly 2 tokens, `TTL` = 3 = `ceil(capacity/rate)`. Tested by `docker cp`-ing the script into the container and driving it with `redis-cli --eval`, which needs no app running.
+- **`POST /api/v1/extract` had NEVER once succeeded.** Every call returned `UNREACHABLE`. Root cause took a wire capture (`nc -l` + a standalone `RestClient`) to find: **RestClient's default JDK HttpClient offers an HTTP/2 upgrade on plaintext** (`Connection: Upgrade`, `Upgrade: h2c`), and **uvicorn's h11 reads that as a protocol switch and never consumes the request body** — so FastAPI saw `body: null` and 422'd every single call. `PageFetcher` was unaffected only by accident: it uses `SimpleClientHttpRequestFactory`, which is HTTP/1.1-only.
+  - Fix: pin `extractorRestClient` to HTTP/1.1 via `JdkClientHttpRequestFactory(HttpClient.newBuilder().version(HTTP_1_1))`. One bean, three lines.
+  - **`ExtractorClientTest` passed throughout and always had.** `MockRestServiceServer` replaces the transport, so it *structurally cannot* catch a transport bug. The JSON contract it guards was fine; the wire was not. **A green mock-based suite is not evidence the integration works** — that gap is still open, and closing it needs Testcontainers.
+  - Second cause of the two-session delay: `ExtractService` swallowed the exception and returned `UNREACHABLE`, the same value a genuinely dead page returns. Now `log.warn`s with the exception. **Reusing a status to mean two different things is what hid this.**
+- **All four `/extract` branches verified live** after the fix: `OK` (rbi.org.in, 378 chars), `PAYWALLED` (example.com), `TOO_LARGE` (Wikipedia at 1.07MB vs the 200KB cap), `UNREACHABLE` (bad domain) — and exactly 2 Redis keys written at 7d TTL, confirming `TOO_LARGE`/`UNREACHABLE` are not cached.
+- **Worth revisiting: the 200KB cap rejects real pages.** Wikipedia is 1.07MB, thehindu.com's front page 322KB. `TOO_LARGE` will be common in practice, not exceptional. That number is a guardrail config value, not a constant — user's call.
+
+**`DomainRateLimiter` wired into the fetch path (PLAN Session 4, item 3 of 5).** It had been a `@Component` nothing injected — a rate limiter that limited nothing.
+- Four decisions settled before any code: (1) the check lives in `ExtractService.extractOne()` between the cache read and the fetch, so a **cache hit never spends a token**; (2) refusal returns a new status `RATE_LIMITED` rather than reusing `UNREACHABLE` — today's bug is the argument for not overloading a status again; (3) **wait, don't fail fast**, since dropping a good URL to enforce politeness makes the research worse; (4) not cached, same reasoning as `UNREACHABLE`.
+- `awaitToken(String)`: ask first, sleep second (so the attempt count is exactly `maxWaitAttempts`, not one more), sleep derived as `1000 / refillRate` rather than hardcoded — at `refill-rate: 0.5` a token needs 2s and a fixed 1s sleep would burn every attempt on nothing. `InterruptedException` restores the flag via `Thread.currentThread().interrupt()` and returns false.
+- `RateLimitProperties` gained `int maxWaitAttempts`. **An unbound YAML key doesn't error — Spring just ignores it**, so adding `max-wait-attempts` to the YAML without a matching record component would have been a clean startup and a setting that did nothing. Same family as the 422: silence is not success.
+- **7 new tests** written before the implementation, each pinning one of the four decisions; suite 60 → 67. `FAST_REFILL = 1000.0` in the test makes a 3-attempt wait finish in microseconds instead of 3 real seconds — the same payoff the injected clock gave `TokenBucket`.
+
+**Session-method note:** the decisions were settled by discussion, but the loop body itself was written by Claude on request after "i donno what to write". Consistent with Session 12's rule — once what's left is mechanics rather than judgement, the correction loop has stopped teaching.
+
+**A UI was built (explicitly requested, overriding `CLAUDE.md`'s "rich UI is cut").**
+- `retrieval-service/src/main/resources/static/`: `index.html`, `app.js`, `topology.js`, `charts.js`. React 18 + `htm` from CDN — **no npm, no build step, no bundler, no new Maven dependency**. Spring serves `static/` automatically; the browser is the runtime. There is no second application to start.
+- Four views: Overview (live topology + build progress), Retrieve, Extract (both live), Verify (**scripted mock, labelled as such** — `control-plane` has no endpoints, so `SUBQUESTIONS`/`CLAIMS` are constants; `runMock()` becomes an `EventSource` when the orchestrator lands and nothing else changes).
+- Two bugs the process caught that would otherwise have shipped: the palette validator found **SUPPORTED (lime) vs PARTIAL (amber) were ΔE 1.4 apart under deuteranopia** — the most important signal in the app, indistinguishable for red-green colourblind readers; re-stepped to teal/orange/violet at ΔE 15.3. And **two classic `<script>`s both declaring top-level `const html` is a fatal SyntaxError** before anything renders — everything is IIFE-scoped now.
+- **Trap worth remembering:** `mvn spring-boot:run` serves from `target/classes`, not `src/`. Editing `static/` and refreshing the browser shows the *old* file until the app is restarted. Same shape as the stale JVM in Session 3 and the `noeviction` Redis container in Session 10.
+
+**Decided (deployment, no money spent):**
+- Measured, not guessed: containers idle at **816 MB**; JVM reports 60 MB heap + 57 MB metaspace, so ~350 MB RSS per Spring service. Week 5 end state ≈ **5.3 GB idle, 7.2 GB peak** with KEDA at 6 replicas. **8 GB is the floor; 5 GB does not fit with k3s + KEDA** — the floor is infrastructure (Redpanda 1.1 GB, k3s 800 MB), which does not scale down with user count. 4 vCPU matters because the Week 4 speedup benchmark would otherwise measure the box, not the design.
+- Cheapest real month-to-month: **Contabo Cloud VPS 4** (4 vCPU / 8 GB / 100 GB SSD) at $7.79 + 18% GST ≈ **₹873/mo**, India DC available, KVM so k3s runs fine. **Hetzner CX33 ≈ ₹995** but bills **hourly with a monthly cap** — at weekend-only usage that's ≈ ₹135/mo, which suits a box that will be destroyed and rebuilt repeatedly. Oracle Always Free was **halved in June 2026** to 2 OCPU / 12 GB; 12 GB still fits but 2 cores is under the benchmark's needs.
+- **A domain is not a prerequisite** — `nip.io` gives a free hostname off the VM IP that Let's Encrypt will issue a real cert for. Buying early only burns the 12-month clock.
+- **Not deploying yet, and that's correct**: Week 5's headline demo is KEDA scaling on Kafka consumer lag, and `agent-service` has no consumer. There is no lag to scale on until Week 2 exists.
+- UI placement decided: `static/` moves to `control-plane` when that service gets endpoints — it's the only service with an ingress in Week 5, so the only one a browser can reach. A separate FE origin is deferred; the cost isn't the container, it's CORS plus cross-origin JWT handling.
+
+**Week 1 Session 4 is now 3 of 5.** Done: cache-aside, Lua token bucket (now verified), limiter wired into the fetch path. Remaining, all the user's column: `CompletableFuture` fan-out, single-flight lock (`SET NX PX 30000`), `Semaphore(4)`, and the done-when (20 concurrent identical `/search` → 1 upstream call, 19 cache hits).
+
+**Not done / still open:**
+- No integration test touches a real Redis or the real sidecar. Every Redis interaction is mocked, which is precisely why the h2c bug survived. **Testcontainers is the fix and it is not written.**
+- Quota is still a gauge, not a cutoff — nothing checks `remaining()` before spending.
+- Guardrails still ~3% of the 7-item table; none of the limits built so far read from a `guardrails:` tree.
+- `docs/story/` (10 files) and `graphify-out/` still untracked; the latter should be gitignored, not committed.
+
+**Next session starts with:** `CompletableFuture` fan-out in `ExtractService.extract()` (`allOf()` + per-future `exceptionally()`), which also makes `awaitToken`'s blocking wait cheap. Then the single-flight lock, `Semaphore(4)`, and the 20-concurrent verification. That closes Week 1, open since 2026-08-08.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -488,3 +543,19 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Prose style
+
+Apply the `humanizer` skill's patterns to prose you write in this project — explanations, code walkthroughs, session notes, PR and commit descriptions, docs — not only when explicitly asked to edit text.
+
+Scope:
+- Applies to: written explanations and any human-facing document.
+- Does not apply to: code, code comments, config, log lines, test names, or raw tool output.
+
+The rule is the skill's own: every sentence kept must add something the reader did not already have. No not-X-but-Y contrasts, staged openers, one-line closers, forced triads, or stock AI vocabulary. Precision over polish — do not soften a technical claim to make it read smoother.
+
+### Ponytail scope
+
+Ponytail governs code, not prose — its own Boundaries section says so. In this project its "at most three short lines" output rule applies to *change summaries only*.
+
+When asked to explain, walk through, review, or document, write the full explanation. Ponytail's brevity rule does not cap it. Laziness applies to the diff, never to the reader's understanding.

@@ -7,7 +7,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "extractor")
 public record ExtractProperties (
     String baseUrl, int maxDocumentBytes,Duration cacheTtl, Duration connectTimeout,
-    Duration readTimeout){
+    Duration readTimeout, int maxConcurrentExtractions){
 
 }
 
