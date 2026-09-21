@@ -103,5 +103,13 @@ critic:
   top-k-passages: 3
   unsupported-ratio-threshold: 0.15
 
+fixtures:
+  # Off by default -- a normal live run costs real DeepSeek/search credits
+  # as usual. Set true for one deliberate run to capture fixture data (see
+  # HttpRetrievalClient/RecordingChatModelConfig); the "fixture" Spring
+  # profile is the separate switch that replays what was captured, never
+  # calling out at all.
+  record-mode: false
+
 server:
   port: 8082
