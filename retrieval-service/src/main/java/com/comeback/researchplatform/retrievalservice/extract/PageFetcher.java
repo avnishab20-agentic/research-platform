@@ -1,10 +1,12 @@
 package com.comeback.researchplatform.retrievalservice.extract;
 
+import com.comeback.researchplatform.common.GuardrailProperties;
 import com.comeback.researchplatform.retrievalservice.config.ExtractProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
@@ -18,16 +20,26 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class PageFetcher {
 
+    public static final String STATUS_BLOCKED = "BLOCKED_PRIVATE_NETWORK";
+
     private final RestClient client;
     private final int maxBytes;
+    private final boolean blockPrivateNetworks;
 
     public PageFetcher(@Qualifier("pageFetchRestClient") RestClient client,
-                       ExtractProperties props) {
+                       ExtractProperties props, GuardrailProperties guardrails) {
         this.client = client;
         this.maxBytes = props.maxDocumentBytes();
+        this.blockPrivateNetworks = guardrails.retrieval().blockPrivateNetworks();
     }
 
     public FetchedPage fetch(String url) {
+        // SSRF protection -- checked unconditionally when enabled, not gated
+        // by guardrails.mode the way search/LLM-call ceilings are. A "shadow"
+        // mode that logs-and-allows a request to 10.0.0.1 defeats the point.
+        if (blockPrivateNetworks && targetsPrivateNetwork(url)) {
+            return new FetchedPage(null, STATUS_BLOCKED);
+        }
         try {
             return client.get()
                     // URI.create, not the raw String: a String is treated as a URI *template*,
@@ -58,6 +70,24 @@ public class PageFetcher {
             // Everything that fails before or during transport: unknown host, connect timeout,
             // read timeout, malformed URL, connection reset mid-download.
             return new FetchedPage(null, "UNREACHABLE");
+        }
+    }
+
+    /** DNS-resolves the URL's host and checks the resolved address against loopback,
+     *  site-local (10.x/172.16-31.x/192.168.x), and link-local ranges. A resolution
+     *  failure or hostless URL is NOT blocked here -- the real fetch attempt below
+     *  will report it as UNREACHABLE on its own terms. */
+    private boolean targetsPrivateNetwork(String url) {
+        try {
+            String host = URI.create(url).getHost();
+            if (host == null) {
+                return false;
+            }
+            InetAddress address = InetAddress.getByName(host);
+            return address.isLoopbackAddress() || address.isSiteLocalAddress()
+                    || address.isLinkLocalAddress() || address.isAnyLocalAddress();
+        } catch (Exception e) {
+            return false;
         }
     }
 }
