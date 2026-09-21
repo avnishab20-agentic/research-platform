@@ -7,3 +7,4 @@ target/
 .claude/settings.local.json
 # graphify generated output (rebuildable from source)
 graphify-out/
+zshrc

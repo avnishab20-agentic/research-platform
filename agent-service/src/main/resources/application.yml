@@ -41,6 +41,8 @@ spring:
     consumer:
       group-id: agent-service
       auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       # One record per poll: a researcher subtask can run up to 90s, so pulling
       # a batch would starve every other subtask on the same partition until
       # the whole batch finishes.
@@ -50,10 +52,38 @@ spring:
         # evicted mid-work, and work silently duplicates with no error -- see
         # CLAUDE.md "Traps that have already cost time".
         max.poll.interval.ms: 600000
+        # JsonDeserializer refuses to instantiate a class outside this list --
+        # a safety check against deserializing arbitrary classes from a topic
+        # an attacker could write to. common is the only package these
+        # messages ever come from.
+        spring.json.trusted.packages: com.comeback.researchplatform.common
+        # research.subtasks only ever carries ResearchSubtask. Pinning a
+        # default type (and ignoring the __TypeId__ header) means this works
+        # whether the producer is Spring's JsonSerializer or anything else
+        # that writes plain JSON to the topic -- a header isn't guaranteed.
+        spring.json.value.default.type: com.comeback.researchplatform.common.ResearchSubtask
+        spring.json.use.type.headers: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     listener:
       # research.subtasks has 12 partitions; 6 concurrent listener threads is
       # the PLAN Week 2 number for parallel researchers.
       concurrency: 6
+
+retrieval:
+  base-url: http://localhost:8081
+  connect-timeout: 5s
+  read-timeout: 30s
+
+researcher:
+  # Interim limits -- see ResearcherProperties javadoc. PLAN's numbers:
+  # 90s wall clock, 25k tokens per subtask.
+  wall-clock-budget: 90s
+  token-budget: 25000
+  max-search-queries: 5
+  max-documents-to-extract: 5
+  passages-per-query: 6
 
 server:
   port: 8082
