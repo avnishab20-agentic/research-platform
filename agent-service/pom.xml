@@ -68,9 +68,11 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <!-- Anthropic Haiku/Sonnet chat model -->
+            <!-- DeepSeek's API is OpenAI-compatible; this starter is the OpenAI
+                 client pointed at a different base-url (see application.yml).
+                 Full swap from Claude, 2026-09-21 - see CLAUDE.md. -->
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-anthropic</artifactId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
         <dependency>
             <!-- Local ONNX embedding model (all-MiniLM-L6-v2), no API key, $0 cost,

@@ -9,6 +9,12 @@
 | 3 | Writer + Critic + verification | Injected fabrication is caught and re-researched |
 | 4 | SSE page + evals | Clone → `compose up` → verified report in 5 min |
 
+> **Deviation (2026-09-21).** Every "(Haiku)"/"(Sonnet)" annotation below now
+> means DeepSeek V4.1 Flash instead — a full provider swap, cost-driven, made
+> under the one-week finish-the-plan deadline. See `CLAUDE.md`'s architecture
+> decisions for the reasoning and the explicitly accepted risk to the
+> fabrication-catch-rate eval.
+
 Concurrency and Redis work is woven through weeks 1–2 rather than being a separate
 phase — see `LEARNING.md` for why each piece is built by hand instead of using the
 framework shortcut.

@@ -49,7 +49,9 @@ discovery built in) and building an OAuth2 authorization server.
 
 Java 21 · Spring Boot 3.3.x · **Maven** (multi-module) · Spring AI 1.0
 Redpanda (Kafka API) · Postgres 16 + pgvector · Redis · SearXNG (self-hosted)
-Claude Haiku (extraction, claim grading) + Sonnet (synthesis)
+DeepSeek V4.1 Flash (all LLM calls, via Spring AI's OpenAI-compatible client)
+-- changed 2026-09-21 from Claude Haiku/Sonnet, cost-driven; see the
+architecture-decision note below
 
 ---
 
@@ -97,11 +99,31 @@ local ONNX model, not a paid API: no new key, $0, deterministic output, which
 matters because Week 4's evals must run on fixture mode for free), store the
 vectors in `pgvector` (`spring-ai-starter-vector-store-pgvector`), then retrieve
 top-k by cosine similarity. The Researcher retrieves against the sub-question
-text before Sonnet synthesizes an answer (replacing a per-source Haiku call in
-the original plan with a vector search); the Critic retrieves against a claim's
-text before grading it. One shared chunk/embed/retrieve utility, two call sites.
-Added 2026-09-21, explicitly for interview value — RAG comes up constantly and
-the project had the pgvector/embedding pieces half-built already.
+text before the chat model synthesizes an answer (replacing a per-source LLM
+call in the original plan with a vector search); the Critic retrieves against
+a claim's text before grading it. One shared chunk/embed/retrieve utility, two
+call sites. Added 2026-09-21, explicitly for interview value — RAG comes up
+constantly and the project had the pgvector/embedding pieces half-built
+already.
+
+**The chat model is DeepSeek, not Claude — swapped 2026-09-21, cost-driven.**
+`agent-service` originally used `spring-ai-starter-model-anthropic`
+(Claude Haiku for cheap steps, Sonnet for synthesis). Under real time pressure
+to finish the 4-week plan in one week, with Claude sessions themselves now
+writing nearly all the code, the added cost of Claude-for-generation on top of
+Claude-for-coding was cut. Swapped to `spring-ai-starter-model-openai` pointed
+at DeepSeek's OpenAI-compatible endpoint (`deepseek-flash`, serving
+DeepSeek-V4.1-Flash — picked over GLM 5.3 Flash for being ~2x cheaper and ~2x
+faster; GLM's only edge, video input, is unused here). Embeddings stay local
+(`spring-ai-starter-model-transformers`) regardless of chat provider — that
+was always a separate decision. `spring.ai.model.chat`/`embedding` (Spring
+AI's multi-provider selector) pins which autoconfiguration wins when more than
+one model starter is on the classpath, rather than juggling per-provider
+`enabled` flags. **Known risk, explicitly accepted:** the Critic's grading is
+the one place model quality directly gates the fabrication-catch-rate eval
+(target >0.85) — this is the axis CLAUDE.md calls "the point of the project."
+A cheaper model here is a real quality tradeoff, not a free lunch; if the
+eval's catch rate comes in low, this is the first thing to revisit.
 
 **Guardrails are configuration, not code paths.** Every limit — call budgets, timeouts,
 document caps, fan-out caps, unsupported-ratio thresholds, eval pass marks — is a number

@@ -6,6 +6,27 @@ spring:
     username: research
     password: research
   ai:
+    model:
+      # Spring AI's multi-provider selector: only activate the openai chat
+      # autoconfig and the transformers embedding autoconfig. Without this,
+      # having both spring-ai-starter-model-openai and -transformers on the
+      # classpath registers two EmbeddingModel beans (openAiEmbeddingModel +
+      # embeddingModel) and Spring can't pick -- this is the real fix, not
+      # a per-provider enabled flag.
+      chat: openai
+      embedding: transformers
+    openai:
+      # DeepSeek's API is OpenAI-compatible -- this is the OpenAI starter
+      # pointed at a different host, not a DeepSeek-specific integration.
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          # deepseek-flash serves DeepSeek-V4.1-Flash as of 2026-09-10 --
+          # cheaper and faster than GLM 5.3 Flash for this project's needs
+          # (text-only; no video input required). If DeepSeek renames this
+          # slug again, this is the one line that needs to change.
+          model: deepseek-flash
     vectorstore:
       pgvector:
         # Flyway (control-plane's V2 migration) owns this table, not Spring AI's
