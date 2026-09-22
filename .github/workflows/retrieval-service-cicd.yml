@@ -82,6 +82,12 @@ jobs:
           IMAGE=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}
           docker build -t $IMAGE -f ${{ env.DOCKER_FILE }} ${{ env.BUILD_CONTEXT_PATH }}
           docker push $IMAGE
+
+      - name: Build and push extractor image to ACR
+        run: |
+          IMAGE=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/extractor:${{ github.sha }}
+          docker build -t $IMAGE ./extractor
+          docker push $IMAGE
   deploy:
     permissions:
       actions: read
@@ -157,14 +163,23 @@ jobs:
             kubectl get namespace ${{ env.NAMESPACE }}
           fi
 
+      # Built from the repo file so there is no second copy of settings.yml to keep in sync.
+      - name: Load SearXNG settings
+        run: |
+          kubectl create configmap searxng-settings --from-file=settings.yml=./searxng/settings.yml -n ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
       # Deploys application based on given manifest  file
       - name: Deploys application
         uses: Azure/k8s-deploy@v5
         with:
           action: deploy
-          manifests: ${{ env.DEPLOYMENT_MANIFEST_PATH }}
+          manifests: |
+            ${{ env.DEPLOYMENT_MANIFEST_PATH }}
+            ./searxng/k8s
+            ./extractor/k8s
           images: |
             ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}
+            ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/extractor:${{ github.sha }}
           resource-group: ${{ env.CLUSTER_RESOURCE_GROUP }}
           name: ${{ env.CLUSTER_NAME }}
           private-cluster: ${{ steps.isPrivate.outputs.PRIVATE_CLUSTER == 'true' }}

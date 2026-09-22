@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: searxng
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: searxng
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080

@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: searxng
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: searxng
+    spec:
+      containers:
+        - name: searxng
+          image: searxng/searxng:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SEARXNG_BASE_URL
+              value: http://searxng:8080/
+          volumeMounts:
+            # subPath mounts only the file, so the rest of /etc/searxng stays writable for the image's entrypoint.
+            - name: settings
+              mountPath: /etc/searxng/settings.yml
+              subPath: settings.yml
+          resources:
+            requests:
+              cpu: "0.1"
+              memory: 256Mi
+            limits:
+              cpu: "0.5"
+              memory: 512Mi
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 5
+      volumes:
+        - name: settings
+          configMap:
+            name: searxng-settings

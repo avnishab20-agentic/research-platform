@@ -10,3 +10,5 @@ data:
   SPRING_DATA_REDIS_HOST: research-platform-redis.centralindia.redis.azure.net
   SPRING_DATA_REDIS_PORT: "10000"
   SPRING_DATA_REDIS_SSL_ENABLED: "true"
+  SEARXNG_BASEURL: "http://searxng:8080"
+  EXTRACTOR_BASEURL: "http://extractor:8000"

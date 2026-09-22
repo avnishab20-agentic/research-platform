@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: extractor
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: extractor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: extractor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: extractor
+    spec:
+      containers:
+        - name: extractor
+          image: researchplatformacr.azurecr.io/extractor:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "0.1"
+              memory: 256Mi
+            limits:
+              cpu: "0.5"
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            periodSeconds: 5
