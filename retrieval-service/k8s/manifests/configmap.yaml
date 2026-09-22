@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: retrieval-service-cicd-config
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: retrieval-service-cicd
+    kubernetes.azure.com/generator: devhub
+data:
+  SPRING_DATA_REDIS_HOST: research-platform-redis.centralindia.redis.azure.net
+  SPRING_DATA_REDIS_PORT: 10000
+  SPRING_DATA_REDIS_SSL_ENABLED: true
