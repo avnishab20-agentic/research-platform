@@ -3,6 +3,7 @@ package com.comeback.researchplatform.controlplane.planner;
 import com.comeback.researchplatform.controlplane.config.PlannerProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 
@@ -40,7 +41,9 @@ class PlannerServiceTest {
         when(callSpec.content()).thenReturn(responseText);
 
         PlannerProperties props = new PlannerProperties(3, MAX_FAN_OUT, Duration.ofMinutes(3));
-        return new PlannerService(builder, mock(JdbcTemplate.class), mock(KafkaTemplate.class), props);
+        Environment environment = mock(Environment.class);
+        return new PlannerService(builder, mock(JdbcTemplate.class), mock(KafkaTemplate.class), props,
+                mock(PlannerFixtureStore.class), false, environment);
     }
 
     @Test

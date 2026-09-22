@@ -4,6 +4,7 @@ import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.common.Verdict;
+import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,7 +25,8 @@ class CriticServiceTest {
 
     private final CriticService service = new CriticService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
-            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15), mock(RunUsageGuard.class));
+            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15), mock(RunUsageGuard.class),
+            mock(FixtureIO.class), false);
 
     @Test
     void allSupportedGivesZeroRatio() {

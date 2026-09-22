@@ -6,10 +6,14 @@ import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
 import com.comeback.researchplatform.common.ClaimKind;
 import com.comeback.researchplatform.common.Verdict;
+import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,16 +51,30 @@ public class CriticService {
     private final JdbcTemplate jdbc;
     private final CriticProperties props;
     private final RunUsageGuard runUsageGuard;
+    private final FixtureIO fixtureIO;
+    private final boolean recordMode;
 
     public CriticService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                           PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
-                          RunUsageGuard runUsageGuard) {
+                          RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
+                          @Value("${fixtures.record-mode:false}") boolean recordMode) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
         this.jdbc = jdbc;
         this.props = props;
         this.runUsageGuard = runUsageGuard;
+        this.fixtureIO = fixtureIO;
+        this.recordMode = recordMode;
+    }
+
+    // Same pattern as ResearcherService.recordChat -- replay is already handled
+    // globally by FixtureChatModel, this only covers the record-mode write side.
+    private void recordChat(String promptText, ChatResponse response) {
+        if (recordMode) {
+            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(promptText),
+                    response.getResult().getOutput().getText());
+        }
     }
 
     @Transactional
@@ -168,17 +186,23 @@ public class CriticService {
             return;
         }
 
+        String system = "You are a fact-checker. For each numbered claim, decide whether the "
+                + "evidence passages support it: SUPPORTED (fully backed), PARTIAL "
+                + "(backed but missing detail or nuance), UNSUPPORTED (evidence doesn't "
+                + "address the claim), or CONTRADICTED (evidence directly disagrees). "
+                + "For each claim, quote the exact sentence from its evidence that most "
+                + "influenced your decision -- copy it verbatim, don't paraphrase.";
+        String user = prompt.toString();
         try {
-            List<ClaimGrade> grades = chatClient.prompt()
-                    .system("You are a fact-checker. For each numbered claim, decide whether the "
-                            + "evidence passages support it: SUPPORTED (fully backed), PARTIAL "
-                            + "(backed but missing detail or nuance), UNSUPPORTED (evidence doesn't "
-                            + "address the claim), or CONTRADICTED (evidence directly disagrees). "
-                            + "For each claim, quote the exact sentence from its evidence that most "
-                            + "influenced your decision -- copy it verbatim, don't paraphrase.")
-                    .user(prompt.toString())
+            // responseEntity, not entity -- same reasoning as WriterService.extractClaims:
+            // one call gets both the parsed grades and the raw text recordChat needs.
+            ResponseEntity<ChatResponse, List<ClaimGrade>> result = chatClient.prompt()
+                    .system(system)
+                    .user(user)
                     .call()
-                    .entity(new ParameterizedTypeReference<List<ClaimGrade>>() {});
+                    .responseEntity(new ParameterizedTypeReference<List<ClaimGrade>>() {});
+            recordChat(system + "\n---\n" + user, result.response());
+            List<ClaimGrade> grades = result.entity();
             if (grades != null) {
                 for (ClaimGrade grade : grades) {
                     UUID claimId = indexToClaimId.get(grade.index());

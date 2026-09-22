@@ -5,9 +5,13 @@ import com.comeback.researchplatform.common.KafkaTopics;
 import com.comeback.researchplatform.common.ClaimsReady;
 import com.comeback.researchplatform.common.ResearchFinding;
 import com.comeback.researchplatform.common.SourceRef;
+import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ResponseEntity;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,15 +45,30 @@ public class WriterService {
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RunUsageGuard runUsageGuard;
+    private final FixtureIO fixtureIO;
+    private final boolean recordMode;
 
     public WriterService(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc,
                           ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
-                          RunUsageGuard runUsageGuard) {
+                          RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
+                          @Value("${fixtures.record-mode:false}") boolean recordMode) {
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.runUsageGuard = runUsageGuard;
+        this.fixtureIO = fixtureIO;
+        this.recordMode = recordMode;
+    }
+
+    // Same pattern as ResearcherService.recordChat -- replay is already handled
+    // globally by FixtureChatModel (the @Profile("fixture") ChatModel bean), this
+    // only covers the record-mode write side.
+    private void recordChat(String promptText, ChatResponse response) {
+        if (recordMode) {
+            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(promptText),
+                    response.getResult().getOutput().getText());
+        }
     }
 
     @Transactional
@@ -127,18 +146,26 @@ public class WriterService {
         String sourceList = finding.sources().stream()
                 .map(s -> s.url() + " (tier " + s.tier() + ")")
                 .collect(Collectors.joining("\n"));
+        String system = "Break the answer below into atomic, individually-checkable claims. "
+                + "Each claim must be a single fact, figure, or quote -- not a "
+                + "compound sentence covering several facts at once. Classify each "
+                + "as FACT, FIGURE, QUOTE, or INFERENCE (your own reasoning or "
+                + "synthesis, not directly stated in any source). Tag each claim "
+                + "with exactly one source URL from the list below, chosen as the "
+                + "one it's most directly based on.";
+        String user = "Answer: " + finding.answer() + "\n\nSources:\n" + sourceList;
         try {
-            List<ExtractedClaim> claims = chatClient.prompt()
-                    .system("Break the answer below into atomic, individually-checkable claims. "
-                            + "Each claim must be a single fact, figure, or quote -- not a "
-                            + "compound sentence covering several facts at once. Classify each "
-                            + "as FACT, FIGURE, QUOTE, or INFERENCE (your own reasoning or "
-                            + "synthesis, not directly stated in any source). Tag each claim "
-                            + "with exactly one source URL from the list below, chosen as the "
-                            + "one it's most directly based on.")
-                    .user("Answer: " + finding.answer() + "\n\nSources:\n" + sourceList)
+            // responseEntity, not entity: it hands back the raw ChatResponse alongside
+            // the parsed claims, in the same call -- entity() alone discards the
+            // response text needed for recordChat, and a second call would double the
+            // real cost/latency just to observe what the first one already returned.
+            ResponseEntity<ChatResponse, List<ExtractedClaim>> result = chatClient.prompt()
+                    .system(system)
+                    .user(user)
                     .call()
-                    .entity(new ParameterizedTypeReference<List<ExtractedClaim>>() {});
+                    .responseEntity(new ParameterizedTypeReference<List<ExtractedClaim>>() {});
+            recordChat(system + "\n---\n" + user, result.response());
+            List<ExtractedClaim> claims = result.entity();
             return claims != null ? claims : List.of();
         } catch (Exception e) {
             log.warn("Claim extraction failed for node {}", finding.nodeId(), e);
