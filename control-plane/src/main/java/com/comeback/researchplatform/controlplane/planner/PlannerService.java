@@ -94,7 +94,9 @@ public class PlannerService {
         return runId;
     }
 
-    private List<String> decompose(String question) {
+    // Package-visible so PlannerServiceTest can assert the fan-out cap
+    // directly, same reasoning as ResearcherService.overBudget().
+    List<String> decompose(String question) {
         try {
             String text = chatClient.prompt()
                     .system("You break a research question into independent sub-questions. "

@@ -257,7 +257,9 @@ public class ResearcherService {
         };
     }
 
-    private boolean overBudget(Instant start) {
+    // Package-visible so ResearcherServiceTest can exercise the wall-clock
+    // guardrail directly, same reasoning as confidenceFor().
+    boolean overBudget(Instant start) {
         return Duration.between(start, Instant.now()).compareTo(props.wallClockBudget()) > 0;
     }
 

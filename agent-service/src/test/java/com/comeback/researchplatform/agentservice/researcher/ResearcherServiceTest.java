@@ -63,4 +63,17 @@ class ResearcherServiceTest {
     void noSourcesScoreZero() {
         assertThat(service.confidenceFor(List.of())).isEqualTo(0.0);
     }
+
+    @Test
+    void wellWithinBudgetIsNotOverBudget() {
+        assertThat(service.overBudget(java.time.Instant.now())).isFalse();
+    }
+
+    @Test
+    void pastTheNinetySecondWallClockBudgetIsOverBudget() {
+        // ResearcherProperties(Duration.ofSeconds(90), ...) above -- a start
+        // time 91 seconds in the past has already crossed the ceiling.
+        java.time.Instant longAgo = java.time.Instant.now().minusSeconds(91);
+        assertThat(service.overBudget(longAgo)).isTrue();
+    }
 }
