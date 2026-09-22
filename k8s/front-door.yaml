@@ -1,31 +1,38 @@
-# One public entry point: the console and retrieval APIs go to retrieval-service,
-# /api/v1/runs goes to control-plane. Same origin for both, so the browser needs no CORS.
+# One public entry point, with automatic HTTPS (Caddy gets and renews a Let's Encrypt
+# certificate): the console and retrieval APIs go to retrieval-service, /api/v1/runs goes to
+# control-plane. Same origin for both, so the browser needs no CORS.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: front-door-config
   namespace: namespace-workflow-1790106905740
 data:
-  default.conf: |
-    server {
-      listen 80;
-
-      location /api/v1/runs {
-        proxy_pass http://control-plane:8083;
-        # Keep the browser's host so control-plane sees a same-origin request; with nginx's
-        # default (control-plane:8083) Spring treats every POST as cross-origin and returns 403.
-        proxy_set_header Host $host;
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        # SSE: pass each event through as it arrives instead of buffering the stream.
-        proxy_buffering off;
-        proxy_read_timeout 1h;
+  Caddyfile: |
+    avnish-research.southindia.cloudapp.azure.com {
+      handle /api/v1/runs* {
+        # Caddy keeps the browser's Host and sets X-Forwarded-Proto, which control-plane
+        # needs to see the request as same-origin. flush_interval -1 streams SSE events at once.
+        reverse_proxy control-plane:8083 {
+          flush_interval -1
+        }
       }
-
-      location / {
-        proxy_pass http://retrieval-service-cicd:8081;
+      handle {
+        reverse_proxy retrieval-service-cicd:8081
       }
     }
+---
+# Keeps the certificate across pod restarts; Let's Encrypt limits re-issuing the same name.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: front-door-data
+  namespace: namespace-workflow-1790106905740
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,6 +43,9 @@ metadata:
     app.kubernetes.io/name: front-door
 spec:
   replicas: 1
+  # An Azure disk attaches to one pod at a time, so stop the old pod before starting the new one.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: front-door
@@ -44,28 +54,34 @@ spec:
       labels:
         app.kubernetes.io/name: front-door
       annotations:
-        # Bump when default.conf changes so the pod restarts and reloads it.
-        config-version: "2"
+        # Bump when the Caddyfile changes so the pod restarts and reloads it.
+        config-version: "3"
     spec:
       containers:
-        - name: nginx
-          image: nginx:1.27-alpine
+        - name: caddy
+          image: caddy:2.8-alpine
           ports:
             - containerPort: 80
+            - containerPort: 443
           volumeMounts:
             - name: config
-              mountPath: /etc/nginx/conf.d
+              mountPath: /etc/caddy
+            - name: data
+              mountPath: /data
           resources:
             requests:
               cpu: "0.05"
-              memory: 32Mi
+              memory: 64Mi
             limits:
               cpu: "0.25"
-              memory: 128Mi
+              memory: 256Mi
       volumes:
         - name: config
           configMap:
             name: front-door-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: front-door-data
 ---
 apiVersion: v1
 kind: Service
@@ -82,6 +98,11 @@ spec:
   selector:
     app.kubernetes.io/name: front-door
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
       targetPort: 80
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 443

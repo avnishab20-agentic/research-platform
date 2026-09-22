@@ -26,6 +26,10 @@ spec:
             # and a 1-CPU pod has one carrier, so one stuck Kafka call froze HTTP requests too.
             - name: SPRING_THREADS_VIRTUAL_ENABLED
               value: "false"
+            # Trust X-Forwarded-Proto from the in-cluster front door, so an https page's POST
+            # is seen as same-origin instead of an http/https mismatch (CORS 403).
+            - name: SERVER_FORWARDHEADERSSTRATEGY
+              value: native
           envFrom:
             - configMapRef:
                 name: platform-config
