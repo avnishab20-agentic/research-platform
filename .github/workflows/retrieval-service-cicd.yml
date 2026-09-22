@@ -48,7 +48,7 @@ env:
   DOCKER_FILE: ./retrieval-service/Dockerfile
   BUILD_CONTEXT_PATH: ./
   NAMESPACE: namespace-workflow-1790106905740
-  ENABLENAMESPACECREATION: false
+  ENABLENAMESPACECREATION: true
   AUTH_TYPE: SERVICE_PRINCIPAL
 
 jobs:
@@ -76,9 +76,12 @@ jobs:
           az acr login -n ${{ env.AZURE_CONTAINER_REGISTRY }}
 
       # Builds and pushes an image up to your Azure Container Registry
+      # ACR Tasks (az acr build) is blocked on this subscription, so build on the runner instead.
       - name: Build and push image to ACR
         run: |
-          az acr build --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }} --registry ${{ env.AZURE_CONTAINER_REGISTRY }} -g ${{ env.ACR_RESOURCE_GROUP }} -f ${{ env.DOCKER_FILE }} ${{ env.BUILD_CONTEXT_PATH }}
+          IMAGE=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}
+          docker build -t $IMAGE -f ${{ env.DOCKER_FILE }} ${{ env.BUILD_CONTEXT_PATH }}
+          docker push $IMAGE
   deploy:
     permissions:
       actions: read
