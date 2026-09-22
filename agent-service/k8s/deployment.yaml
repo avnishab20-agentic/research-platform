@@ -27,6 +27,10 @@ spec:
             # The JVM defaults to a 25% heap; the embedding model needs more headroom.
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxRAMPercentage=75.0
+            # On Java 21 a Kafka client blocking under a lock pins its virtual thread's carrier,
+            # and a 1-CPU pod has one carrier, so one stuck Kafka call froze the whole app.
+            - name: SPRING_THREADS_VIRTUAL_ENABLED
+              value: "false"
           envFrom:
             - configMapRef:
                 name: platform-config

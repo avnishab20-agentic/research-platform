@@ -21,6 +21,11 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8083
+          env:
+            # On Java 21 a Kafka client blocking under a lock pins its virtual thread's carrier,
+            # and a 1-CPU pod has one carrier, so one stuck Kafka call froze HTTP requests too.
+            - name: SPRING_THREADS_VIRTUAL_ENABLED
+              value: "false"
           envFrom:
             - configMapRef:
                 name: platform-config
