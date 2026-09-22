@@ -12,6 +12,9 @@ data:
 
       location /api/v1/runs {
         proxy_pass http://control-plane:8083;
+        # Keep the browser's host so control-plane sees a same-origin request; with nginx's
+        # default (control-plane:8083) Spring treats every POST as cross-origin and returns 403.
+        proxy_set_header Host $host;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         # SSE: pass each event through as it arrives instead of buffering the stream.
@@ -42,7 +45,7 @@ spec:
         app.kubernetes.io/name: front-door
       annotations:
         # Bump when default.conf changes so the pod restarts and reloads it.
-        config-version: "1"
+        config-version: "2"
     spec:
       containers:
         - name: nginx
