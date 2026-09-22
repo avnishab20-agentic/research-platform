@@ -39,6 +39,14 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>4.1.0</version>
+                    <!-- No spring-boot-starter-parent here, so repackage must be bound explicitly or package yields a thin, non-runnable jar. -->
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
