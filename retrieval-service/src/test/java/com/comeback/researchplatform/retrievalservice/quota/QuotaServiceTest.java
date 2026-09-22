@@ -10,6 +10,7 @@ import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,7 +42,8 @@ class QuotaServiceTest {
 
     private QuotaService serviceWith(GuardrailMode mode) {
         var retrieval = new GuardrailProperties.Retrieval(
-                DAILY_LIMIT, 1.0, 3, 4, 5, Duration.ofSeconds(5), Duration.ofSeconds(15), 2_097_152, true);
+                DAILY_LIMIT, 1.0, 3, 4, 5, Duration.ofSeconds(5), Duration.ofSeconds(15), 2_097_152, true,
+                List.of("http", "https"));
         var run = new GuardrailProperties.Run(
                 Duration.ofMinutes(10), 40, 60, 8, 2, "PARTIAL");
         var agent = new GuardrailProperties.Agent(

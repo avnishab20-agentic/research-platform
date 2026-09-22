@@ -11,6 +11,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -42,7 +43,7 @@ class PageFetcherTest {
                 Duration.ofDays(7), Duration.ofSeconds(5), Duration.ofSeconds(10), 4);
         var retrieval = new GuardrailProperties.Retrieval(
                 1000, 1.0, 3, 4, 5, Duration.ofSeconds(5), Duration.ofSeconds(15),
-                MAX_BYTES, blockPrivateNetworks);
+                MAX_BYTES, blockPrivateNetworks, List.of("http", "https"));
         var run = new GuardrailProperties.Run(Duration.ofMinutes(10), 40, 60, 8, 2, "PARTIAL");
         var agent = new GuardrailProperties.Agent(
                 new GuardrailProperties.Agent.Researcher(Duration.ofSeconds(90), 25000, 5, "PARTIAL_LOW_CONFIDENCE"));
@@ -147,6 +148,15 @@ class PageFetcherTest {
         FetchedPage page = fetcher.fetch("https://example.com/a");
 
         assertThat(page.isOk()).isTrue();
+    }
+
+    @Test
+    void disallowedSchemeIsBlocked() {
+        // No expectation set on the mock server -- the request must never be made.
+        FetchedPage page = fetcher.fetch("file:///etc/passwd");
+
+        assertThat(page.status()).isEqualTo(PageFetcher.STATUS_SCHEME_BLOCKED);
+        assertThat(page.html()).isNull();
     }
 
     @Test

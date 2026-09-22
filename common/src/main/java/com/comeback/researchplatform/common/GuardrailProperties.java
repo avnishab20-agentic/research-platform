@@ -3,6 +3,7 @@ package com.comeback.researchplatform.common;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 /**
  * The one {@code guardrails:} tree every limit in this project is supposed
@@ -55,7 +56,8 @@ public record GuardrailProperties(
             Duration connectTimeout,
             Duration readTimeout,
             int maxDocumentBytes,
-            boolean blockPrivateNetworks
+            boolean blockPrivateNetworks,
+            List<String> allowedSchemes
     ) {}
 
     public record Eval(double minCatchRate, double maxFalsePositiveRate) {}

@@ -47,6 +47,7 @@ guardrails:
     read-timeout: 15s
     max-document-bytes: 2097152
     block-private-networks: true
+    allowed-schemes: [http, https]
 
   eval:
     min-catch-rate: 0.85

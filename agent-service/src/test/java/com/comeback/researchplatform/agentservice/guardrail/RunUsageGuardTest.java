@@ -7,6 +7,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +26,8 @@ class RunUsageGuardTest {
     private RunUsageGuard guardWith(GuardrailMode mode) {
         jdbc = mock(JdbcTemplate.class);
         var retrieval = new GuardrailProperties.Retrieval(
-                1000, 1.0, 3, 4, 5, Duration.ofSeconds(5), Duration.ofSeconds(15), 2_097_152, true);
+                1000, 1.0, 3, 4, 5, Duration.ofSeconds(5), Duration.ofSeconds(15), 2_097_152, true,
+                List.of("http", "https"));
         var run = new GuardrailProperties.Run(Duration.ofMinutes(10), MAX_SEARCHES, 60, 8, 2, "PARTIAL");
         var agent = new GuardrailProperties.Agent(
                 new GuardrailProperties.Agent.Researcher(Duration.ofSeconds(90), 25000, 5, "PARTIAL_LOW_CONFIDENCE"));

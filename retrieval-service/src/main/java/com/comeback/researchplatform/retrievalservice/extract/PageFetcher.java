@@ -9,6 +9,8 @@ import org.springframework.web.client.RestClient;
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Fetches raw HTML for one URL.
@@ -21,19 +23,28 @@ import java.nio.charset.StandardCharsets;
 public class PageFetcher {
 
     public static final String STATUS_BLOCKED = "BLOCKED_PRIVATE_NETWORK";
+    public static final String STATUS_SCHEME_BLOCKED = "BLOCKED_SCHEME";
 
     private final RestClient client;
     private final int maxBytes;
     private final boolean blockPrivateNetworks;
+    private final List<String> allowedSchemes;
 
     public PageFetcher(@Qualifier("pageFetchRestClient") RestClient client,
                        ExtractProperties props, GuardrailProperties guardrails) {
         this.client = client;
         this.maxBytes = props.maxDocumentBytes();
         this.blockPrivateNetworks = guardrails.retrieval().blockPrivateNetworks();
+        this.allowedSchemes = guardrails.retrieval().allowedSchemes();
     }
 
     public FetchedPage fetch(String url) {
+        // Same reasoning as the private-network check below: a scheme like file:// or
+        // gopher:// bypassing HTTP entirely is worth rejecting unconditionally, not
+        // gating behind guardrails.mode.
+        if (!isAllowedScheme(url)) {
+            return new FetchedPage(null, STATUS_SCHEME_BLOCKED);
+        }
         // SSRF protection -- checked unconditionally when enabled, not gated
         // by guardrails.mode the way search/LLM-call ceilings are. A "shadow"
         // mode that logs-and-allows a request to 10.0.0.1 defeats the point.
@@ -71,6 +82,20 @@ public class PageFetcher {
             // read timeout, malformed URL, connection reset mid-download.
             return new FetchedPage(null, "UNREACHABLE");
         }
+    }
+
+    /** A malformed URL is NOT rejected here -- it falls through to the real fetch's own
+     *  URI.create, which reports it as UNREACHABLE the same way it always has. This check
+     *  only fires when the URL parses cleanly but names a scheme (or no scheme) outside
+     *  the allowlist, e.g. file:// or javascript:. */
+    private boolean isAllowedScheme(String url) {
+        String scheme;
+        try {
+            scheme = URI.create(url).getScheme();
+        } catch (Exception e) {
+            return true;
+        }
+        return scheme != null && allowedSchemes.contains(scheme.toLowerCase(Locale.ROOT));
     }
 
     /** DNS-resolves the URL's host and checks the resolved address against loopback,
