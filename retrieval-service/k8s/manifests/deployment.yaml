@@ -7,7 +7,7 @@ metadata:
     kubernetes.azure.com/generator: devhub
   namespace: namespace-workflow-1790106905740
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: retrieval-service-cicd
@@ -24,7 +24,7 @@ spec:
             - containerPort: 8081
           resources:
             requests:
-              cpu: "0.5"
+              cpu: "0.25"
               memory: "0.5Gi"
             limits:
               cpu: "1"
