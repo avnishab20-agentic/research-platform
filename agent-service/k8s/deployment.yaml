@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: agent-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-service
+    spec:
+      containers:
+        - name: agent-service
+          image: researchplatformacr.azurecr.io/agent-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          env:
+            - name: RETRIEVAL_BASEURL
+              value: http://retrieval-service-cicd:8081
+            # The JVM defaults to a 25% heap; the embedding model needs more headroom.
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxRAMPercentage=75.0
+          envFrom:
+            - configMapRef:
+                name: platform-config
+            - secretRef:
+                name: app-secrets
+          resources:
+            requests:
+              cpu: "0.25"
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          # Up to 3 minutes: JVM start plus downloading the embedding model on first boot.
+          startupProbe:
+            tcpSocket:
+              port: 8082
+            periodSeconds: 5
+            failureThreshold: 36

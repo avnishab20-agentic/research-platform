@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: namespace-workflow-1790106905740
+data:
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://research-platform-pg.postgres.database.azure.com:5432/research?sslmode=require"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "research-platform-eventhubs.servicebus.windows.net:9093"
+  SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: "SASL_SSL"
+  SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: "PLAIN"
+  # Spring resolves ${EVENTHUBS_CONNECTION_STRING} from the app-secrets Secret; $ConnectionString is a literal Event Hubs expects.
+  SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: 'org.apache.kafka.common.security.plain.PlainLoginModule required username="$ConnectionString" password="${EVENTHUBS_CONNECTION_STRING}";'
+  # Azure's load balancer drops connections idle for ~4 min; close them first.
+  SPRING_KAFKA_PROPERTIES_CONNECTIONS_MAX_IDLE_MS: "180000"

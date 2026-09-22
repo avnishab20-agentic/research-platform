@@ -88,6 +88,14 @@ jobs:
           IMAGE=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/extractor:${{ github.sha }}
           docker build -t $IMAGE ./extractor
           docker push $IMAGE
+
+      - name: Build and push agent-service and control-plane images to ACR
+        run: |
+          for svc in agent-service control-plane; do
+            IMAGE=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/$svc:${{ github.sha }}
+            docker build -t $IMAGE -f ./$svc/Dockerfile ./
+            docker push $IMAGE
+          done
   deploy:
     permissions:
       actions: read
@@ -177,9 +185,14 @@ jobs:
             ${{ env.DEPLOYMENT_MANIFEST_PATH }}
             ./searxng/k8s
             ./extractor/k8s
+            ./k8s
+            ./agent-service/k8s
+            ./control-plane/k8s
           images: |
             ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.CONTAINER_NAME }}:${{ github.sha }}
             ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/extractor:${{ github.sha }}
+            ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/agent-service:${{ github.sha }}
+            ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/control-plane:${{ github.sha }}
           resource-group: ${{ env.CLUSTER_RESOURCE_GROUP }}
           name: ${{ env.CLUSTER_NAME }}
           private-cluster: ${{ steps.isPrivate.outputs.PRIVATE_CLUSTER == 'true' }}
