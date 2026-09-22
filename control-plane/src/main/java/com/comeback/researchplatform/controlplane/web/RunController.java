@@ -3,6 +3,7 @@ package com.comeback.researchplatform.controlplane.web;
 import com.comeback.researchplatform.controlplane.planner.PlannerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -58,6 +59,18 @@ public class RunController {
 
     @GetMapping("/{id}")
     public RunStatusResponse status(@PathVariable("id") UUID id) {
+        MDC.put("runId", id.toString());
+        try {
+            return loadStatus(id);
+        } finally {
+            MDC.remove("runId");
+        }
+    }
+
+    // Not MDC-wrapped: report() below calls this directly (not the public
+    // status() endpoint method) so its own MDC.remove in a finally can't
+    // fire partway through report()'s own remaining work.
+    private RunStatusResponse loadStatus(UUID id) {
         try {
             return jdbc.queryForObject(
                     "SELECT id, question, status FROM runs WHERE id = ?",
@@ -87,6 +100,10 @@ public class RunController {
         AtomicReference<String> lastPayload = new AtomicReference<>();
 
         ScheduledFuture<?> future = poller.scheduleAtFixedRate(() -> {
+            // The poller runs on its own dedicated thread, not the request
+            // thread that called events() -- MDC is thread-local, so it has to
+            // be set here too, not just at the top of events() itself.
+            MDC.put("runId", id.toString());
             try {
                 RunProgressEvent progress = currentProgress(id);
                 String payload = progress.status() + ":" + progress.completed() + "/" + progress.expected();
@@ -102,6 +119,8 @@ public class RunController {
             } catch (Exception e) {
                 log.warn("SSE poll failed for run {}", id, e);
                 emitter.completeWithError(e);
+            } finally {
+                MDC.remove("runId");
             }
         }, 0, 1, TimeUnit.SECONDS);
 
@@ -138,7 +157,16 @@ public class RunController {
      *  frontend redesign was needed to switch from the scripted mock. */
     @GetMapping("/{id}/report")
     public RunReportResponse report(@PathVariable("id") UUID id) {
-        RunStatusResponse run = status(id);
+        MDC.put("runId", id.toString());
+        try {
+            return buildReport(id);
+        } finally {
+            MDC.remove("runId");
+        }
+    }
+
+    private RunReportResponse buildReport(UUID id) {
+        RunStatusResponse run = loadStatus(id);
         List<ClaimView> claims = jdbc.query(
                 "SELECT c.text, cv.verdict, s.url AS source_url, s.tier, cv.evidence_passage "
                         + "FROM claims c "

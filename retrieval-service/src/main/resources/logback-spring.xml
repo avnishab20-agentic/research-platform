@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two output shapes, picked by Spring profile, not by editing this file later:
+  plain text for a human watching a local terminal, JSON for whatever log
+  aggregator eventually gets wired up (Loki, ELK, CloudWatch, Datadog - all
+  of them just want structured JSON lines, no per-tool parsing config).
+  Activate with SPRING_PROFILES_ACTIVE=json (add it to whatever profiles are
+  already active, e.g. "json" alone here since this service has no role
+  profiles of its own).
+
+  %X{runId} pulls the correlation id set via MDC at the start of a run-scoped
+  operation (see RunController/PlannerService/FindingListener in control-plane,
+  the three @KafkaListener classes in agent-service) - empty string if the
+  current log line isn't inside one of those.
+-->
+<configuration>
+    <springProfile name="!json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} runId=%X{runId} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- "service" lets one shared log store (once you pick one) tell
+                     retrieval-service's lines apart from agent-service's/control-plane's. -->
+                <customFields>{"service":"retrieval-service"}</customFields>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+</configuration>

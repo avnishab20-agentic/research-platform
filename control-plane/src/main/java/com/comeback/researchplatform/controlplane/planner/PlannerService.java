@@ -5,7 +5,11 @@ import com.comeback.researchplatform.common.ResearchSubtask;
 import com.comeback.researchplatform.controlplane.config.PlannerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -34,18 +38,42 @@ public class PlannerService {
     private final JdbcTemplate jdbc;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final PlannerProperties props;
+    private final PlannerFixtureStore fixtureStore;
+    private final boolean recordMode;
+    private final Environment environment;
 
     public PlannerService(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc,
-                           KafkaTemplate<String, Object> kafkaTemplate, PlannerProperties props) {
+                           KafkaTemplate<String, Object> kafkaTemplate, PlannerProperties props,
+                           PlannerFixtureStore fixtureStore,
+                           @Value("${fixtures.record-mode:false}") boolean recordMode,
+                           Environment environment) {
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
         this.kafkaTemplate = kafkaTemplate;
         this.props = props;
+        this.fixtureStore = fixtureStore;
+        this.recordMode = recordMode;
+        this.environment = environment;
     }
 
     @Transactional
     public UUID submit(String question) {
         UUID runId = UUID.randomUUID();
+        // Every log line for the rest of this method -- and every log line any
+        // downstream service emits once it picks up a message carrying this
+        // runId -- can be filtered to just this one run, once a log aggregator
+        // is in the picture. Cleared in finally so it never leaks onto whatever
+        // this thread handles next.
+        MDC.put("runId", runId.toString());
+        try {
+            return doSubmit(runId, question);
+        } finally {
+            MDC.remove("runId");
+        }
+    }
+
+    private UUID doSubmit(UUID runId, String question) {
+        log.info("Run submitted: '{}'", question);
         jdbc.update("INSERT INTO runs (id, question, status) VALUES (?, ?, 'RUNNING')", runId, question);
         // Row must exist before any Kafka consumer could possibly try to
         // increment it -- created here, in the same transaction, before the
@@ -97,6 +125,13 @@ public class PlannerService {
     // Package-visible so PlannerServiceTest can assert the fan-out cap
     // directly, same reasoning as ResearcherService.overBudget().
     List<String> decompose(String question) {
+        // Unlike agent-service, control-plane has no FixtureChatModel swapping the
+        // underlying ChatModel bean under the "fixture" profile -- this is the only
+        // chat call-site here, so the branch is inline rather than a whole extra
+        // bean/profile machinery for one method.
+        if (environment.acceptsProfiles(Profiles.of("fixture"))) {
+            return fixtureStore.read(PlannerFixtureStore.keyFor(question));
+        }
         try {
             String text = chatClient.prompt()
                     .system("You break a research question into independent sub-questions. "
@@ -110,11 +145,18 @@ public class PlannerService {
             if (text == null) {
                 return List.of();
             }
-            return Arrays.stream(text.split("\\R"))
+            List<String> subQuestions = Arrays.stream(text.split("\\R"))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .limit(props.maxFanOut())
                     .toList();
+            // A live run doubles as the way fixture data gets captured -- same pattern
+            // ResearcherService/HttpRetrievalClient use, keyed on the question text so a
+            // fixture-mode replay of the same question hits this exact recorded plan.
+            if (recordMode) {
+                fixtureStore.record(PlannerFixtureStore.keyFor(question), subQuestions);
+            }
+            return subQuestions;
         } catch (Exception e) {
             log.warn("Planner decomposition failed for question '{}'", question, e);
             return List.of();

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two output shapes, picked by Spring profile: plain text locally, JSON once a
+  log aggregator (Loki, ELK, CloudWatch, Datadog) is wired up - add "json" to
+  SPRING_PROFILES_ACTIVE (alongside RESEARCHER,WRITER,CRITIC) to switch.
+
+  %X{runId} is the correlation id - set via MDC at the top of each of this
+  service's three @KafkaListener methods (ResearchSubtaskListener,
+  RunReadyListener, ClaimsReadyListener), cleared in a finally so it never
+  leaks onto an unrelated message handled by the same pooled thread.
+-->
+<configuration>
+    <springProfile name="!json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} runId=%X{runId} - %msg%n</pattern>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <springProfile name="json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"agent-service"}</customFields>
+            </encoder>
+        </appender>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+    </root>
+</configuration>

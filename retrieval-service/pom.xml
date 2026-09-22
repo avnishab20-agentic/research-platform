@@ -30,6 +30,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
+        <!-- JSON log output, tool-agnostic: any log shipper (Filebeat, Promtail,
+             Fluent Bit, CloudWatch agent) reads structured JSON lines directly, no
+             per-tool parsing config. See logback-spring.xml's "json" profile. -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.0</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

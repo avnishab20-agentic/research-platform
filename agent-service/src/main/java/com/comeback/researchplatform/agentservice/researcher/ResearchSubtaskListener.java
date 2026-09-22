@@ -5,6 +5,7 @@ import com.comeback.researchplatform.common.ResearchFinding;
 import com.comeback.researchplatform.common.ResearchSubtask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -38,12 +39,17 @@ public class ResearchSubtaskListener {
     // reach a stable assignment). Each listener now owns its own group.
     @KafkaListener(topics = KafkaTopics.RESEARCH_SUBTASKS, groupId = "agent-service-researcher")
     public void onSubtask(ResearchSubtask subtask) {
-        log.info("Researching sub-question '{}' (run {})", subtask.subQuestion(), subtask.runId());
-        ResearchFinding finding = researcherService.research(subtask);
-        // Keyed by runId so every finding for one run lands on the same
-        // partition -- not required for fan-in correctness (that's a Postgres
-        // counter, not partition ordering) but keeps one run's traffic
-        // co-located, which is easier to reason about when debugging.
-        kafkaTemplate.send(KafkaTopics.RESEARCH_FINDINGS, subtask.runId().toString(), finding);
+        MDC.put("runId", subtask.runId().toString());
+        try {
+            log.info("Researching sub-question '{}'", subtask.subQuestion());
+            ResearchFinding finding = researcherService.research(subtask);
+            // Keyed by runId so every finding for one run lands on the same
+            // partition -- not required for fan-in correctness (that's a Postgres
+            // counter, not partition ordering) but keeps one run's traffic
+            // co-located, which is easier to reason about when debugging.
+            kafkaTemplate.send(KafkaTopics.RESEARCH_FINDINGS, subtask.runId().toString(), finding);
+        } finally {
+            MDC.remove("runId");
+        }
     }
 }
