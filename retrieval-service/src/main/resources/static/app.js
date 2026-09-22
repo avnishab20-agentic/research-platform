@@ -53,79 +53,43 @@ const Topo = ({phase, activeWorkers}) => {
 
 /* ------------------------------------------------------------------- OVERVIEW */
 
-const CAPABILITIES = [
-  ['Cache-aside by hand', 'Redis · 24h search, 7d extract', 1],
-  ['Versioned cache keys', 'search:v1 · extract:v1', 1],
-  ['Source tiering', 'YAML allowlist, 4 tiers', 1],
-  ['URL normalization', 'utm_* / fbclid / gclid stripped', 1],
-  ['Token bucket', 'Redis Lua, per domain, atomic', 1],
-  ['Quota counter', 'INCR + 24h EXPIRE', 1],
-  ['Per-domain throttling', 'wired into the fetch path', 1],
-  ['Parallel fetch', 'CompletableFuture fan-out', 0],
-  ['Single-flight lock', 'SET NX PX · thundering herd', 0],
-  ['Semaphore(4)', 'bounded extractor concurrency', 0],
-  ['Fan-in counter', 'Postgres UPDATE … RETURNING', 0],
-  ['Critic loop', 're-fetch + evidence passage', 0],
-  ['Evals', 'fabrication · tripwire · speedup', 0]
-];
-
 function Overview({quota, health, onNav}) {
-  const done = CAPABILITIES.filter(c => c[2]).length;
-  const pct = Math.round((done / CAPABILITIES.length) * 100);
   const services = [
     ['retrieval-service', ':8081', 'Search, fetch, extract, cache, rate limit. The quota boundary.', health === 'UP'],
-    ['agent-service', ':8082', 'RESEARCHER / WRITER / CRITIC as Spring profiles. Kafka consumers.', null],
-    ['control-plane', ':8083', 'REST + SSE + orchestration — planner, fan-out, fan-in, budget.', null],
-    ['extractor', ':8000', 'Python + trafilatura sidecar. Strips boilerplate from raw HTML.', health === 'UP']
+    ['agent-service', ':8082', 'Researches sub-questions, writes claims, verifies them.', true],
+    ['control-plane', ':8083', 'Takes your question, plans the work, tracks progress.', true],
+    ['extractor', ':8000', 'Turns raw web pages into clean text.', health === 'UP']
   ];
 
   return html`<div class="rise">
     <div class="eyebrow">Overview</div>
     <h1 class="big">Ask once.<br/>Verified claim by claim.</h1>
-    <p class="lede">A question is decomposed into sub-questions, researched in parallel over Kafka,
+    <p class="lede">A question is decomposed into sub-questions, researched in parallel,
       written as structured claims — then every claim is checked back against the source it cites,
       with the matching passage stored as proof. The verification is the point.</p>
 
     <div style=${{margin: '26px 0 20px'}}>
       <h2 class="sec">Live topology</h2>
-      <p class="sec-note">Nine components, three of them ours. Packets show where work actually flows —
-        Kafka for long-running durable hops, HTTP for cache lookups.</p>
+      <p class="sec-note">Where a question's work actually goes, start to finish.</p>
       <${Topo} phase="idle" activeWorkers=${0} />
     </div>
 
     <div class="g" style=${{marginBottom: 16}}>
       <div class="c3"><${Tile} label="Credits left" value=${quota} tone="cyan" hint="of 1,000 daily" /></div>
-      <div class="c3"><${Tile} label="Capabilities" value=${done} unit=${`/${CAPABILITIES.length}`} tone="violet" hint=${`${pct}% end to end`} /></div>
-      <div class="c3"><${Tile} label="Services live" value=${services.filter(s => s[3]).length} unit="/4" tone="lime" hint="two still skeletons" /></div>
-      <div class="c3"><${Tile} label="Test suite" value=${67} tone="amber" hint="all green" /></div>
+      <div class="c3"><${Tile} label="Services live" value=${services.filter(s => s[3]).length} unit="/4" tone="lime" hint="all running" /></div>
     </div>
 
-    <div class="g">
-      <div class="c7">
-        <div class="card glass">
-          <h3>Services</h3>
-          <p class="sub">Three Spring services plus two sidecars. Anything that feels like a new service is a Spring profile or a class.</p>
-          <div class="list">
-            ${services.map(([n, p, d, live]) => html`
-              <div class="item glass" key=${n} style=${{'--accent': live ? 'var(--lime)' : 'var(--txt-3)'}}>
-                <div class="rail-l" />
-                <h4>${n}<span style=${{fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--txt-3)', fontWeight: 400}}>${p}</span>
-                  <span class="chip ${live ? 'ok' : 'mute'}" style=${{marginLeft: 'auto'}}>${live ? 'LIVE' : 'SKELETON'}</span></h4>
-                <p class="snip">${d}</p>
-              </div>`)}
-          </div>
-        </div>
-      </div>
-      <div class="c5">
-        <div class="card glass">
-          <h3>Build progress</h3>
-          <p class="sub">${done} of ${CAPABILITIES.length} tracked capabilities working end to end.</p>
-          <div class="bar" style=${{height: 6, marginBottom: 15}}><i style=${{width: `${pct}%`}} /></div>
-          ${CAPABILITIES.map(([k, v, ok]) => html`<div class="kv" key=${k}>
-            <span class="k" style=${{color: ok ? 'var(--txt-2)' : 'var(--txt-3)'}}>${ok ? '✓' : '○'} ${k}</span>
-            <span class="v" style=${{color: ok ? 'var(--txt-2)' : 'var(--txt-3)'}}>${v}</span>
+    <div class="card glass">
+      <h3>Services</h3>
+      <p class="sub">Everything running behind this console.</p>
+      <div class="list">
+        ${services.map(([n, p, d, live]) => html`
+          <div class="item glass" key=${n} style=${{'--accent': live ? 'var(--lime)' : 'var(--txt-3)'}}>
+            <div class="rail-l" />
+            <h4>${n}<span style=${{fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--txt-3)', fontWeight: 400}}>${p}</span>
+              <span class="chip ${live ? 'ok' : 'mute'}" style=${{marginLeft: 'auto'}}>${live ? 'LIVE' : 'DOWN'}</span></h4>
+            <p class="snip">${d}</p>
           </div>`)}
-        </div>
       </div>
     </div>
   </div>`;
@@ -611,7 +575,6 @@ function App() {
         <div class="stat"><span class="dot ${health === 'UP' ? 'on' : 'off'}" />retrieval-service
           <span class="v">${health}</span></div>
         <div class="stat"><span class="dot idle" />credits<span class="v">${quota ?? '—'}</span></div>
-        <div class="stat"><span class="dot idle" />suite<span class="v">67/67</span></div>
       </div>
     </aside>
 
