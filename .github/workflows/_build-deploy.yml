@@ -1,0 +1,101 @@
+# Shared recipe called by each per-service workflow: build and push one image (optional),
+# then apply that service's manifests to AKS.
+name: build-and-deploy
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image name in ACR. Leave empty for a public image that needs no build.
+        type: string
+        default: ''
+      dockerfile:
+        type: string
+        default: ''
+      context:
+        type: string
+        default: ./
+      manifests:
+        description: Manifest files or folders, one per line.
+        type: string
+        required: true
+      pre-deploy:
+        description: Shell run against the cluster before the manifests are applied.
+        type: string
+        default: ''
+
+env:
+  REGISTRY: researchplatformacr
+  RESOURCE_GROUP: research-platform-rg
+  CLUSTER_NAME: research-platform-aks
+  NAMESPACE: namespace-workflow-1790106905740
+
+jobs:
+  build:
+    if: inputs.image != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - run: az acr login -n $REGISTRY
+
+      # ACR Tasks (az acr build) is blocked on this subscription, so build on the runner.
+      - name: Build and push image
+        run: |
+          IMAGE=$REGISTRY.azurecr.io/${{ inputs.image }}:${{ github.sha }}
+          docker build -t $IMAGE -f ${{ inputs.dockerfile }} ${{ inputs.context }}
+          docker push $IMAGE
+
+  deploy:
+    needs: build
+    # Run after a successful build, or straight away when there was nothing to build.
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.0.25'
+
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          admin: 'false'
+          use-kubelogin: 'true'
+
+      - name: Ensure namespace exists
+        run: kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Pre-deploy
+        if: inputs.pre-deploy != ''
+        run: ${{ inputs.pre-deploy }}
+
+      - uses: Azure/k8s-deploy@v5
+        with:
+          action: deploy
+          namespace: ${{ env.NAMESPACE }}
+          manifests: ${{ inputs.manifests }}
+          images: ${{ inputs.image != '' && format('{0}.azurecr.io/{1}:{2}', env.REGISTRY, inputs.image, github.sha) || '' }}
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          name: ${{ env.CLUSTER_NAME }}

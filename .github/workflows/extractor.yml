@@ -1,13 +1,11 @@
-name: retrieval-service
+name: extractor
 
 on:
   push:
     branches: [main]
     paths:
-      - retrieval-service/**
-      - common/**
-      - pom.xml
-      - .github/workflows/retrieval-service-cicd.yml
+      - extractor/**
+      - .github/workflows/extractor.yml
       - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
@@ -23,6 +21,7 @@ jobs:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
-      image: retrieval-service
-      dockerfile: ./retrieval-service/Dockerfile
-      manifests: ./retrieval-service/k8s/manifests
+      image: extractor
+      dockerfile: ./extractor/Dockerfile
+      context: ./extractor
+      manifests: ./extractor/k8s

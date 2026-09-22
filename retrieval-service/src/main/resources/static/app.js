@@ -328,10 +328,10 @@ function Extract({seedUrl}) {
 
 /* ---------------------------------------------------------- PREVIEW: verify */
 
-// LIVE: control-plane on :8083, a different origin from this page (:8081).
-// @CrossOrigin on RunController allows localhost:8081/127.0.0.1:8081 only --
-// this is a single-user local demo, not a public API.
-const controlApi = (p) => `http://localhost:8083/api/v1${p}`;
+// LIVE: locally this page is served by retrieval-service on :8081 and control-plane
+// is a separate origin on :8083 (@CrossOrigin allows localhost:8081 only). In AKS
+// the front door serves both from one origin, so a relative path is enough.
+const controlApi = (p) => (location.port === '8081' ? 'http://localhost:8083' : '') + `/api/v1${p}`;
 
 const VERDICT_TONE = {SUPPORTED: 'ok', PARTIAL: 'warn', UNSUPPORTED: 'bad', CONTRADICTED: 'bad', UNREACHABLE: 'warn'};
 

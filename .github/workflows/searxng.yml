@@ -1,0 +1,29 @@
+name: searxng
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - searxng/**
+      - .github/workflows/searxng.yml
+      - .github/workflows/_build-deploy.yml
+  workflow_dispatch:
+
+concurrency: ${{ github.workflow }}
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/_build-deploy.yml
+    secrets: inherit
+    with:
+      # Public image, nothing to build. settings.yml is loaded from the repo file,
+      # and the restart makes a changed file take effect (it fails harmlessly on first deploy).
+      manifests: ./searxng/k8s
+      pre-deploy: |
+        kubectl create configmap searxng-settings --from-file=settings.yml=./searxng/settings.yml -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+        kubectl rollout restart deployment/searxng -n $NAMESPACE || true

@@ -1,13 +1,13 @@
-name: retrieval-service
+name: control-plane
 
 on:
   push:
     branches: [main]
     paths:
-      - retrieval-service/**
+      - control-plane/**
       - common/**
       - pom.xml
-      - .github/workflows/retrieval-service-cicd.yml
+      - .github/workflows/control-plane.yml
       - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
@@ -23,6 +23,6 @@ jobs:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
-      image: retrieval-service
-      dockerfile: ./retrieval-service/Dockerfile
-      manifests: ./retrieval-service/k8s/manifests
+      image: control-plane
+      dockerfile: ./control-plane/Dockerfile
+      manifests: ./control-plane/k8s

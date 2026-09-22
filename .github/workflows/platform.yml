@@ -1,13 +1,13 @@
-name: retrieval-service
+# Shared cluster config (platform-config ConfigMap) and the public front door.
+# A platform-config change only reaches agent-service and control-plane after they restart.
+name: platform
 
 on:
   push:
     branches: [main]
     paths:
-      - retrieval-service/**
-      - common/**
-      - pom.xml
-      - .github/workflows/retrieval-service-cicd.yml
+      - k8s/**
+      - .github/workflows/platform.yml
       - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
@@ -23,6 +23,4 @@ jobs:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
-      image: retrieval-service
-      dockerfile: ./retrieval-service/Dockerfile
-      manifests: ./retrieval-service/k8s/manifests
+      manifests: ./k8s

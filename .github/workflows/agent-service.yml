@@ -1,13 +1,13 @@
-name: retrieval-service
+name: agent-service
 
 on:
   push:
     branches: [main]
     paths:
-      - retrieval-service/**
+      - agent-service/**
       - common/**
       - pom.xml
-      - .github/workflows/retrieval-service-cicd.yml
+      - .github/workflows/agent-service.yml
       - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
@@ -23,6 +23,6 @@ jobs:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
-      image: retrieval-service
-      dockerfile: ./retrieval-service/Dockerfile
-      manifests: ./retrieval-service/k8s/manifests
+      image: agent-service
+      dockerfile: ./agent-service/Dockerfile
+      manifests: ./agent-service/k8s

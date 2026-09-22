@@ -6,8 +6,8 @@ metadata:
   labels:
     app.kubernetes.io/name: control-plane
 spec:
-  # The one service meant to be reached from a browser. No auth yet (JWT is still to do).
-  type: LoadBalancer
+  # Reached from the browser only through the front door (k8s/front-door.yaml).
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: control-plane
   ports:

@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: retrieval-service-cicd
     kubernetes.azure.com/generator: devhub
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: retrieval-service-cicd
   ports:

@@ -1,0 +1,84 @@
+# One public entry point: the console and retrieval APIs go to retrieval-service,
+# /api/v1/runs goes to control-plane. Same origin for both, so the browser needs no CORS.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: front-door-config
+  namespace: namespace-workflow-1790106905740
+data:
+  default.conf: |
+    server {
+      listen 80;
+
+      location /api/v1/runs {
+        proxy_pass http://control-plane:8083;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # SSE: pass each event through as it arrives instead of buffering the stream.
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+      }
+
+      location / {
+        proxy_pass http://retrieval-service-cicd:8081;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front-door
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: front-door
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: front-door
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: front-door
+      annotations:
+        # Bump when default.conf changes so the pod restarts and reloads it.
+        config-version: "1"
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              cpu: "0.05"
+              memory: 32Mi
+            limits:
+              cpu: "0.25"
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: front-door-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: front-door
+  namespace: namespace-workflow-1790106905740
+  labels:
+    app.kubernetes.io/name: front-door
+  annotations:
+    # Free Azure hostname: avnish-research.southindia.cloudapp.azure.com, reattached if the IP changes.
+    service.beta.kubernetes.io/azure-dns-label-name: avnish-research
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: front-door
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
