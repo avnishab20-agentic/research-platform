@@ -1,12 +1,12 @@
 /* Research Platform — console shell.
    React 18 + htm over CDN: real components, no build step, no npm, no Maven dependency.
 
-   Two kinds of screen live here, and the split is deliberate:
-     LIVE    — Overview / Retrieve / Extract read retrieval-service on this origin.
-     PREVIEW — Verify runs off a scripted mock. control-plane has no endpoints yet, so
-               the pipeline shows the real *shape* of a run with fabricated data. When
-               the orchestrator lands, runMock() becomes an EventSource and nothing
-               else in this file changes.
+   All four screens are live:
+     Overview / Retrieve / Extract read retrieval-service on this origin (:8081).
+     Verify reads control-plane on :8083 -- a different origin, so it uses absolute
+     URLs (controlApi()) and an EventSource instead of the same-origin api() helper
+     the other three tabs use. control-plane's RunController allows CORS from this
+     origin explicitly for that reason.
 
    topology.js and charts.js are loaded before this file and register window.Topology /
    window.Charts. Both are optional at runtime — if either is missing the page still
@@ -364,31 +364,24 @@ function Extract({seedUrl}) {
 
 /* ---------------------------------------------------------- PREVIEW: verify */
 
-const SUBQUESTIONS = [
-  'What rate decisions has the RBI announced in 2026?',
-  'How has CPI inflation moved against the target band?',
-  'What is the current stance on liquidity and CRR?',
-  'What do major banks forecast for the next two quarters?',
-  'How has the rupee responded to policy announcements?',
-  'What structural risks does the RBI itself flag?'
-];
+// LIVE: control-plane on :8083, a different origin from this page (:8081).
+// @CrossOrigin on RunController allows localhost:8081/127.0.0.1:8081 only --
+// this is a single-user local demo, not a public API.
+const controlApi = (p) => `http://localhost:8083/api/v1${p}`;
 
-const CLAIMS = [
-  {t: 'The RBI held the policy repo rate at 6.50% at its February 2026 meeting.', v: 'SUPPORTED', s: 'rbi.org.in', tier: 1,
-   e: 'On the basis of an assessment of the current and evolving macroeconomic situation, the Monetary Policy Committee decided to keep the policy repo rate under the liquidity adjustment facility unchanged at 6.50 per cent.'},
-  {t: 'Headline CPI inflation printed at 4.8% year-on-year in January 2026.', v: 'SUPPORTED', s: 'mospi.gov.in', tier: 1,
-   e: 'All India Consumer Price Index (Combined) year-on-year inflation rate for January 2026 stood at 4.8 per cent, moderating from the previous month.'},
-  {t: 'The MPC vote was unanimous across all six members.', v: 'PARTIAL', s: 'rbi.org.in', tier: 1,
-   e: 'Four members voted in favour of the resolution while two members voted for a change in stance, with the decision carried by majority.'},
-  {t: 'The rupee strengthened sharply following the announcement.', v: 'UNSUPPORTED', s: 'thehindu.com', tier: 2,
-   e: 'No passage in the cited source discusses currency movement following the policy announcement. The nearest related content covers government bond yields only.'},
-  {t: 'The RBI flagged elevated unsecured retail credit growth as a systemic concern.', v: 'SUPPORTED', s: 'rbi.org.in', tier: 1,
-   e: 'Growth in unsecured retail lending has continued to outpace overall credit growth, and banks have been advised to strengthen their internal surveillance mechanisms.'},
-  {t: 'Analysts unanimously expect a cut in the next two quarters.', v: 'UNSUPPORTED', s: 'indianexpress.com', tier: 2,
-   e: 'The cited article quotes three economists, two of whom expect a hold rather than a cut. "Unanimously" overreaches what the source supports.'}
-];
+const VERDICT_TONE = {SUPPORTED: 'ok', PARTIAL: 'warn', UNSUPPORTED: 'bad', CONTRADICTED: 'bad', UNREACHABLE: 'warn'};
 
-const VERDICT_TONE = {SUPPORTED: 'ok', PARTIAL: 'warn', UNSUPPORTED: 'bad'};
+// runs.status -> the same 5-stage UI the old mock used. RUNNING covers both
+// planning and researching in Postgres (the planner's own LLM call and the
+// fan-out happen inside one status value) -- expected > 0 means dag_levels'
+// row exists, i.e. fan-out has happened, so treat that as 'research'.
+function statusToPhase(status, expected) {
+  if (status === 'RUNNING') return expected > 0 ? 'research' : 'plan';
+  if (status === 'FINDINGS_COMPLETE') return 'write';
+  if (status === 'CLAIMS_READY') return 'verify';
+  if (status === 'VERIFIED' || status === 'UNVERIFIED' || status === 'PARTIAL') return 'done';
+  return 'idle';
+}
 
 function Verify() {
   const [question, setQuestion] = useState('What is the RBI’s monetary policy stance in 2026?');
@@ -396,36 +389,50 @@ function Verify() {
   const [workers, setWorkers] = useState([]);
   const [claims, setClaims] = useState([]);
   const [sel, setSel] = useState(null);
-  const timers = useRef([]);
+  const [err, setErr] = useState(null);
+  const esRef = useRef(null);
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  const at = (ms, fn) => timers.current.push(setTimeout(fn, ms));
+  useEffect(() => () => { if (esRef.current) esRef.current.close(); }, []);
+
+  const loadReport = (runId) => {
+    fetch(controlApi(`/runs/${runId}/report`))
+      .then(r => r.json())
+      .then(report => setClaims(report.claims.map(c => ({
+        t: c.text, v: c.verdict, s: c.sourceUrl, tier: c.tier,
+        e: c.evidencePassage || '(no evidence recorded -- claim had no retrievable passages)'
+      }))))
+      .catch(() => setErr('Run finished but the report could not be loaded.'));
+  };
 
   const run = () => {
-    timers.current.forEach(clearTimeout); timers.current = [];
-    setClaims([]); setSel(null);
-    setWorkers(SUBQUESTIONS.map(q => ({q, state: 'queued', pct: 0, docs: 0})));
+    if (esRef.current) { esRef.current.close(); esRef.current = null; }
+    setClaims([]); setSel(null); setErr(null); setWorkers([]);
     setPhase('plan');
-    at(1200, () => setPhase('research'));
 
-    // Researchers finish at deliberately different times. That variance is exactly why
-    // fan-in is a Postgres counter and not a Kafka Streams window — a window wide enough
-    // for the slowest subtask is uselessly generous for the fastest.
-    SUBQUESTIONS.forEach((_, i) => {
-      const start = 1350 + i * 180;
-      const dur = 2200 + Math.random() * 3600;
-      at(start, () => setWorkers(w => w.map((x, j) => j === i ? {...x, state: 'running'} : x)));
-      for (let s = 1; s <= 5; s++) {
-        at(start + (dur / 5) * s, () => setWorkers(w => w.map((x, j) =>
-          j === i ? {...x, pct: s * 20, docs: Math.min(5, Math.round(s * 1.1))} : x)));
-      }
-      at(start + dur, () => setWorkers(w => w.map((x, j) => j === i ? {...x, state: 'done', pct: 100} : x)));
-    });
-
-    at(6800, () => setPhase('write'));
-    at(8600, () => setPhase('verify'));
-    CLAIMS.forEach((c, i) => at(9000 + i * 620, () => setClaims(cs => [...cs, c])));
-    at(9000 + CLAIMS.length * 620 + 500, () => setPhase('done'));
+    fetch(controlApi('/runs'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question})
+    })
+      .then(r => { if (!r.ok) throw new Error('submit failed'); return r.json(); })
+      .then(({runId}) => {
+        const es = new EventSource(controlApi(`/runs/${runId}/events`));
+        esRef.current = es;
+        es.addEventListener('progress', (ev) => {
+          const p = JSON.parse(ev.data);
+          setPhase(statusToPhase(p.status, p.expected));
+          setWorkers(p.workers.map(w => ({q: w.subQuestion, state: w.state === 'PENDING' ? 'queued' : 'done'})));
+          if (p.status === 'VERIFIED' || p.status === 'UNVERIFIED' || p.status === 'PARTIAL') {
+            loadReport(runId);
+            es.close();
+          }
+        });
+        es.onerror = () => {
+          setErr('Lost connection to control-plane’s event stream.');
+          es.close();
+        };
+      })
+      .catch(() => setErr('Could not reach control-plane on :8083 — is it running?'));
   };
 
   const stages = [
@@ -444,18 +451,14 @@ function Verify() {
   const {VerdictSplit} = C();
 
   return html`<div class="rise">
-    <div class="eyebrow">Preview · control-plane not built</div>
+    <div class="eyebrow">Live · control-plane on :8083</div>
     <h2 class="sec" style=${{fontSize: 22, marginBottom: 5}}>Verify</h2>
     <p class="sec-note">The differentiator. A report is only as good as the check that follows it —
       so every claim is re-checked against its own source, and the passage that justifies the verdict is kept.</p>
 
-    <div class="notice" style=${{marginBottom: 16}}>
-      <span style=${{fontSize: 15}}>◑</span>
-      <div><b>Scripted mock, not a backend.</b> <span style=${{fontFamily: 'var(--mono)'}}>control-plane</span>${' '}
-      currently has no endpoints. The pipeline shape, the staggered fan-in, the verdicts and the evidence
-      panel are exactly what a real run will render — only the data is fabricated. When the orchestrator
-      lands this becomes an SSE stream and nothing else in the UI changes.</div>
-    </div>
+    ${err && html`<div class="notice" style=${{marginBottom: 16}}>
+      <span style=${{fontSize: 15}}>▲</span><div><b>${err}</b></div>
+    </div>`}
 
     <div class="card glass" style=${{marginBottom: 16}}>
       <label class="f">Question</label>
@@ -465,7 +468,7 @@ function Verify() {
           ${running ? html`<span class="spinner" />` : '▶'}${' '}${running ? 'Running' : 'Start run'}
         </button>
         ${phase === 'done' && html`<button class="btn ghost"
-          onClick=${() => {setPhase('idle'); setWorkers([]); setClaims([]); setSel(null);}}>Reset</button>`}
+          onClick=${() => {setPhase('idle'); setWorkers([]); setClaims([]); setSel(null); setErr(null);}}>Reset</button>`}
       </div>
     </div>
 
@@ -483,14 +486,13 @@ function Verify() {
             ${id === 'research' && stageState(id) && html`<div class="workers">
               ${workers.map((w, i) => html`<div class="worker" key=${i}>
                 <div class="t">
-                  <span class="dot ${w.state === 'running' ? 'on' : 'idle'}"
-                        style=${w.state === 'done' ? {background: 'var(--teal)'} : null} />
+                  <span class="dot idle" style=${w.state === 'done' ? {background: 'var(--teal)'} : null} />
                   <span>Researcher ${i + 1}</span>
                   <span style=${{marginLeft: 'auto', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--txt-3)'}}>
-                    ${w.state === 'done' ? `${w.docs} docs` : w.state === 'running' ? `${w.pct}%` : 'queued'}</span>
+                    ${w.state === 'done' ? 'done' : 'queued'}</span>
                 </div>
                 <div class="q">${w.q}</div>
-                <div class="bar"><i style=${{width: `${w.pct}%`}} /></div>
+                <div class="bar"><i style=${{width: w.state === 'done' ? '100%' : '0%'}} /></div>
               </div>`)}
             </div>`}
           </div>
@@ -555,7 +557,7 @@ const NAV = [
   ['overview', 'Overview', 'M3 12h4l3-8 4 16 3-8h4', null],
   ['retrieve', 'Retrieve', 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', null],
   ['extract', 'Extract', 'M12 3v12m0 0l-4-4m4 4l4-4M4 19h16', null],
-  ['verify', 'Verify', 'M4 12l5 5L20 6', 'PREVIEW']
+  ['verify', 'Verify', 'M4 12l5 5L20 6', null]
 ];
 const IDS = NAV.map(n => n[0]);
 
