@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/name: retrieval-service-cicd
     kubernetes.azure.com/generator: devhub
 data:
-  SPRING_DATA_REDIS_HOST: research-platform-redis.centralindia.redis.azure.net
+  SPRING_DATA_REDIS_HOST: research-platform-redis2.centralindia.redis.azure.net
   SPRING_DATA_REDIS_PORT: "10000"
   SPRING_DATA_REDIS_SSL_ENABLED: "true"
   SEARXNG_BASEURL: "http://searxng:8080"
