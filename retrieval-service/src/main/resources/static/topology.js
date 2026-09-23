@@ -12,15 +12,15 @@ const html = htm.bind(React.createElement);
  * nine boxes, they never move, and a solver would only make the labels drift.
  */
 const NODES = [
-  {id: 'browser',   x: 24,  y: 100, w: 110, h: 58,  label: 'Browser',           sub: 'SSE',                   hue: 'violet'},
-  {id: 'control',   x: 172, y: 95,  w: 176, h: 68,  label: 'control-plane',     sub: ':8083 · planner, fan-in', hue: 'violet'},
-  {id: 'postgres',  x: 172, y: 255, w: 176, h: 58,  label: 'Postgres',          sub: 'runs · dag_levels',     hue: 'violet'},
-  {id: 'redpanda',  x: 390, y: 95,  w: 140, h: 68,  label: 'Redpanda',          sub: 'research.subtasks',     hue: 'violet'},
-  {id: 'agent',     x: 580, y: 70,  w: 200, h: 118, label: 'agent-service',     sub: ':8082',                 hue: 'amber'},
-  {id: 'retrieval', x: 580, y: 250, w: 200, h: 64,  label: 'retrieval-service', sub: ':8081 · quota boundary', hue: 'cyan'},
-  {id: 'redis',     x: 505, y: 350, w: 118, h: 52,  label: 'Redis',             sub: 'cache · buckets',       hue: 'cyan'},
-  {id: 'searxng',   x: 635, y: 350, w: 118, h: 52,  label: 'SearXNG',           sub: 'search',                hue: 'cyan'},
-  {id: 'extractor', x: 765, y: 350, w: 118, h: 52,  label: 'extractor',         sub: 'trafilatura',           hue: 'cyan'},
+  {id: 'browser',   x: 24,  y: 100, w: 110, h: 58,  label: 'You',           sub: 'browser',           hue: 'violet'},
+  {id: 'control',   x: 172, y: 95,  w: 176, h: 68,  label: 'Planner',       sub: 'control-plane',     hue: 'violet'},
+  {id: 'postgres',  x: 172, y: 255, w: 176, h: 58,  label: 'Progress log',  sub: 'Postgres',          hue: 'violet'},
+  {id: 'redpanda',  x: 390, y: 95,  w: 140, h: 68,  label: 'Job queue',     sub: 'Redpanda (Kafka)',  hue: 'violet'},
+  {id: 'agent',     x: 580, y: 70,  w: 200, h: 118, label: 'AI agents',     sub: 'agent-service',     hue: 'amber'},
+  {id: 'retrieval', x: 580, y: 250, w: 200, h: 64,  label: 'Web access',    sub: 'retrieval-service', hue: 'cyan'},
+  {id: 'redis',     x: 505, y: 350, w: 118, h: 52,  label: 'Memory',        sub: 'Redis cache',       hue: 'cyan'},
+  {id: 'searxng',   x: 635, y: 350, w: 118, h: 52,  label: 'Search engine', sub: 'SearXNG',           hue: 'cyan'},
+  {id: 'extractor', x: 765, y: 350, w: 118, h: 52,  label: 'Page reader',   sub: 'extractor',         hue: 'cyan'},
 ];
 
 /* Browser<->control-plane and agent<->redpanda are each drawn as two separate
@@ -55,9 +55,9 @@ const PHASES = {
 };
 
 const CHIPS = [
-  {id: 'RESEARCHER', phase: 'research'},
-  {id: 'WRITER',     phase: 'write'},
-  {id: 'CRITIC',     phase: 'verify'},
+  {id: 'RESEARCH',   phase: 'research'},
+  {id: 'WRITE',      phase: 'write'},
+  {id: 'FACT-CHECK', phase: 'verify'},
 ];
 
 const HUE_VAR = {violet: 'var(--violet)', cyan: 'var(--cyan)', amber: 'var(--amber)', lime: 'var(--lime)'};
