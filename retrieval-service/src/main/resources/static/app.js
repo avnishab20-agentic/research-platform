@@ -688,6 +688,7 @@ function App() {
   };
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'light' ? '#ffffff' : '#050507');
     try { localStorage.setItem('theme', theme); } catch {}
   }, [theme]);
 
