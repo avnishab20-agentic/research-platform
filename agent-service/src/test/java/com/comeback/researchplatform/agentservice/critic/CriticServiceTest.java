@@ -27,7 +27,8 @@ class CriticServiceTest {
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
             mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15, 6), mock(RunUsageGuard.class),
             mock(FixtureIO.class), false, mock(ClaimCorrector.class),
-            mock(com.comeback.researchplatform.agentservice.activity.RunActivityLog.class), null);
+            mock(com.comeback.researchplatform.agentservice.activity.RunActivityLog.class), null,
+            mock(ConclusionWriter.class));
 
     @Test
     void tallyCountsContradictedAsFailedAndMissingAsUnchecked() {

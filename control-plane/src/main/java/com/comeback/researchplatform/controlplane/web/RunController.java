@@ -8,6 +8,7 @@ import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -47,8 +48,10 @@ public class RunController {
 
     private final PlannerService plannerService;
     private final JdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
 
-    public RunController(PlannerService plannerService, JdbcTemplate jdbc) {
+    public RunController(PlannerService plannerService, JdbcTemplate jdbc, ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         this.plannerService = plannerService;
         this.jdbc = jdbc;
     }
@@ -185,18 +188,20 @@ public class RunController {
     private RunReportResponse buildReport(UUID id) {
         RunStatusResponse run = loadStatus(id);
         List<ClaimView> claims = jdbc.query(
-                "SELECT c.text, cv.verdict, s.url AS source_url, s.tier, cv.evidence_passage, "
+                "SELECT c.id, c.text, cv.verdict, s.url AS source_url, s.tier, cv.evidence_passage, "
                         + "c.section_heading, c.original_text, c.correction "
                         + "FROM claims c "
                         + "JOIN sources s ON c.source_id = s.id "
                         + "LEFT JOIN claim_verdicts cv ON cv.claim_id = c.id "
                         + "WHERE c.run_id = ? ORDER BY c.created_at",
                 (rs, rowNum) -> new ClaimView(
-                        rs.getString("text"),
+                        (UUID) rs.getObject("id"), rs.getString("text"),
                         rs.getString("verdict") != null ? rs.getString("verdict") : "UNREACHABLE",
                         rs.getString("source_url"), rs.getInt("tier"), rs.getString("evidence_passage"),
                         rs.getString("section_heading"), rs.getString("original_text"), rs.getString("correction")),
                 id);
-        return new RunReportResponse(run.id(), run.question(), run.status(), claims);
+        String conclusion = jdbc.queryForObject("SELECT conclusion::text FROM runs WHERE id = ?", String.class, id);
+        return new RunReportResponse(run.id(), run.question(), run.status(),
+                conclusion == null ? null : objectMapper.readTree(conclusion), claims);
     }
 }

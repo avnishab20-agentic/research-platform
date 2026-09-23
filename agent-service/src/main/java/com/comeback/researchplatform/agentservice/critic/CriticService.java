@@ -58,13 +58,15 @@ public class CriticService {
     private final ClaimCorrector claimCorrector;
     private final RunActivityLog activity;
     private final GuardrailProperties guardrails;
+    private final ConclusionWriter conclusionWriter;
 
     public CriticService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                           PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
                           RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
                           @Value("${fixtures.record-mode:false}") boolean recordMode,
                           ClaimCorrector claimCorrector, RunActivityLog activity,
-                          GuardrailProperties guardrails) {
+                          GuardrailProperties guardrails, ConclusionWriter conclusionWriter) {
+        this.conclusionWriter = conclusionWriter;
         this.claimCorrector = claimCorrector;
         this.activity = activity;
         this.guardrails = guardrails;
@@ -167,6 +169,14 @@ public class CriticService {
                 .map(id -> verdicts.getOrDefault(id, Verdict.UNREACHABLE))
                 .toList();
         double ratio = unsupportedRatio(published);
+        // Before the status flips, so the UI finds the conclusion when it loads the report.
+        conclusionWriter.write(runId, current.values().stream()
+                .filter(c -> !removed.contains(c.id()))
+                .filter(c -> {
+                    Verdict v = verdicts.getOrDefault(c.id(), Verdict.UNREACHABLE);
+                    return v == Verdict.SUPPORTED || v == Verdict.PARTIAL;
+                })
+                .toList());
         // Above threshold still publishes, banner-marked, per CLAUDE.md's "a
         // failed run is published, never silently dropped".
         String status = ratio > props.unsupportedRatioThreshold() ? "UNVERIFIED" : "VERIFIED";

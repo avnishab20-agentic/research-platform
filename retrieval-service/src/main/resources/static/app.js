@@ -443,8 +443,12 @@ function Workspace({workers, feed, running, phase}) {
   </div>`;
 }
 
-function Answer({claims, final}) {
+// Collapsed topic cards show this many statements before "Show all".
+const PREVIEW = 5;
+
+function Answer({claims, final, conclusion}) {
   const [sel, setSel] = useState(null);
+  const [openSec, setOpenSec] = useState({});
   const kept = claims.filter(c => c.corr !== 'REMOVED');
   const revised = claims.filter(c => c.corr === 'REVISED');
   const removed = claims.filter(c => c.corr === 'REMOVED');
@@ -458,54 +462,90 @@ function Answer({claims, final}) {
     sites.set(h, cur);
   });
   const sources = [...sites.values()];
-  const num = new Map(kept.map((c, i) => [c, i + 1]));
-  const pick = (c) => setSel(sel === c ? null : c);
+  // Numbered in reading order (topic by topic), not creation order -- a rewritten
+  // claim is created last and would otherwise show up as #68 in the first topic.
+  const num = new Map(sections.flatMap(sec => kept.filter(c => (c.sec || 'Findings') === sec)).map((c, i) => [c, i + 1]));
+  const byId = new Map(kept.map(c => [c.id, c]));
 
-  return html`<div class="fade">
-    <article class="doc">
-      <div class="facts">
-        <span><b>${confirmed}</b>of ${kept.length} statements confirmed</span>
-        ${revised.length > 0 && html`<span><b>${revised.length}</b>fixed by the fact-checker</span>`}
-        ${removed.length > 0 && html`<span><b>${removed.length}</b>removed</span>`}
-        <span><b>${sources.length}</b>${sources.length === 1 ? 'website' : 'websites'} cited</span>
-      </div>
+  // A citation chip jumps to its statement: open its topic, select it, scroll it into view.
+  const focus = (c) => {
+    const sec = c.sec || 'Findings';
+    setOpenSec(o => ({...o, [sec]: true}));
+    setSel(c);
+    setTimeout(() => document.getElementById('st-' + num.get(c))?.scrollIntoView({behavior: 'smooth', block: 'center'}), 60);
+  };
+  const Cites = ({ids}) => html`<span class="cites">${(ids || []).map(id => byId.get(id)).filter(Boolean).map(c =>
+    html`<button type="button" class="cite t-${verdictOf(c.v).tone}" key=${c.id} title=${c.t}
+      onClick=${() => focus(c)}>${num.get(c)}</button>`)}</span>`;
 
-      ${final && final !== 'VERIFIED' && html`<div class="notice" style=${{marginBottom: 20}}>
-        <span>▲</span><div><b>${final === 'PARTIAL' ? 'Some research didn’t finish in time.' : 'Parts of this couldn’t be confirmed.'}</b>
-        ${' '}The full answer is still shown, with the doubtful sentences marked, instead of being hidden.</div>
+  return html`<div class="fade answer">
+    ${conclusion && html`<section class="concl rise">
+      <div class="eyebrow">The answer</div>
+      <p class="lead">${conclusion.answer} <${Cites} ids=${conclusion.answerClaimIds} /></p>
+      ${conclusion.takeaways?.length > 0 && html`<div class="takes">
+        ${conclusion.takeaways.map((t, i) => html`<div class="take" key=${i} style=${{animationDelay: `${.08 + i * .07}s`}}>
+          <span class="tn">${i + 1}</span><div>${t.text} <${Cites} ids=${t.claimIds} /></div>
+        </div>`)}
       </div>`}
+      <p class="hint">Written only from statements that passed the fact-check. Numbers point to the statements below.</p>
+    </section>`}
 
-      ${sections.map(sec => {
+    <div class="facts">
+      <span><b>${confirmed}</b>of ${kept.length} statements confirmed</span>
+      ${revised.length > 0 && html`<span><b>${revised.length}</b>fixed by the fact-checker</span>`}
+      ${removed.length > 0 && html`<span><b>${removed.length}</b>removed</span>`}
+      <span><b>${sources.length}</b>${sources.length === 1 ? 'website' : 'websites'} cited</span>
+    </div>
+
+    ${final && final !== 'VERIFIED' && html`<div class="notice" style=${{marginBottom: 20}}>
+      <span>▲</span><div><b>${final === 'PARTIAL' ? 'Some research didn’t finish in time.' : 'Parts of this couldn’t be confirmed.'}</b>
+      ${' '}The full answer is still shown, with the doubtful sentences marked, instead of being hidden.</div>
+    </div>`}
+
+    <div class="panel-h">Evidence by topic</div>
+    <div class="topics">
+      ${sections.map((sec, si) => {
         const inSec = kept.filter(c => (c.sec || 'Findings') === sec);
-        const selHere = sel && inSec.includes(sel);
-        return html`<section class="sect" key=${sec}>
-          <h4>${sec}</h4>
-          <p class="prose">
-            ${inSec.map(c => {
-              const vd = verdictOf(c.v);
-              return html`<span key=${num.get(c)} role="button" tabindex="0" aria-pressed=${sel === c}
-                class="sent t-${vd.tone} ${sel === c ? 'sel' : ''}" title=${vd.label}
-                onClick=${() => pick(c)}
-                onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(c); } }}
-              >${c.t}${c.corr === 'REVISED' && html`<span class="fixed">FIXED</span>`}<sup>${num.get(c)}</sup></span>${' '}`;
+        const ok = inSec.filter(c => c.v === 'SUPPORTED').length;
+        const open = openSec[sec];
+        const shown = open ? inSec : inSec.slice(0, PREVIEW);
+        return html`<section class="topic rise" key=${sec} style=${{animationDelay: `${si * .06}s`}}>
+          <div class="topic-h">
+            <h4>${sec}</h4>
+            <span class="meter" title=${`${ok} of ${inSec.length} confirmed`}>
+              <i style=${{width: (inSec.length ? ok / inSec.length * 100 : 0) + '%'}} /></span>
+            <span class="cnt">${ok}/${inSec.length} confirmed</span>
+          </div>
+          <ul class="stmts">
+            ${shown.map(c => {
+              const vd = verdictOf(c.v), n = num.get(c), on = sel === c;
+              return html`<li key=${n} id=${'st-' + n} class="stmt t-${vd.tone} ${on ? 'sel' : ''}">
+                <button type="button" class="row-b" aria-expanded=${on} onClick=${() => setSel(on ? null : c)}>
+                  <span class="dot" /><span class="n">${n}</span>
+                  <span class="tx">${c.t}${c.corr === 'REVISED' && html`<span class="fixed">FIXED</span>`}</span>
+                  <span class="hostl">${host(c.s)}</span>
+                </button>
+                ${on && html`<div class="ev fade">
+                  <div class="top-l"><span class="chip ${vd.tone}">${vd.label}</span>${vd.text}</div>
+                  ${c.orig && html`<p class="was">Before the fact-check this said: <s>${c.orig}</s></p>`}
+                  <div class="pass"><div class="lbl">What the source actually says</div>${c.e || 'No matching passage was found in the source.'}</div>
+                  <div class="src"><span class="tier t${c.tier}">${TIER_NAME[c.tier] || 'Source'}</span>
+                    <a href=${c.s} target="_blank" rel="noopener noreferrer">${host(c.s)} ↗</a></div>
+                </div>`}
+              </li>`;
             })}
-          </p>
-          ${selHere && html`<div class="ev fade">
-            <div class="top-l"><span class="chip ${verdictOf(sel.v).tone}">${verdictOf(sel.v).label}</span>${verdictOf(sel.v).text}</div>
-            ${sel.orig && html`<p class="was">Before the fact-check this said: <s>${sel.orig}</s></p>`}
-            <div class="pass"><div class="lbl">What the source actually says</div>${sel.e || 'No matching passage was found in the source.'}</div>
-            <div class="src"><span class="tier t${sel.tier}">${TIER_NAME[sel.tier] || 'Source'}</span>
-              <a href=${sel.s} target="_blank" rel="noopener noreferrer">${host(sel.s)} ↗</a></div>
-          </div>`}
+          </ul>
+          ${inSec.length > PREVIEW && html`<button type="button" class="btn ghost sm more"
+            onClick=${() => setOpenSec(o => ({...o, [sec]: !open}))}>
+            ${open ? 'Show fewer' : `Show all ${inSec.length} statements`}</button>`}
         </section>`;
       })}
-      <p class="hint">Tap any sentence to see the passage that backs it.</p>
-      <div class="legend">
-        <span class="t-ok"><i />Confirmed</span>
-        <span class="t-warn"><i />Partly confirmed or source unavailable</span>
-        <span class="t-bad"><i />Not confirmed or contradicted</span>
-      </div>
-    </article>
+    </div>
+    <div class="legend">
+      <span class="t-ok"><i />Confirmed</span>
+      <span class="t-warn"><i />Partly confirmed or source unavailable</span>
+      <span class="t-bad"><i />Not confirmed or contradicted</span>
+    </div>
 
     ${(revised.length > 0 || removed.length > 0) && html`<div class="caught">
       <h3><span class="av sm a-critic">F</span>What the fact-checker caught</h3>
@@ -545,6 +585,7 @@ function Ask() {
   const [workers, setWorkers] = useState([]);
   const [feed, setFeed] = useState([]);
   const [claims, setClaims] = useState([]);
+  const [conclusion, setConclusion] = useState(null);
   const [final, setFinal] = useState(null);
   const [err, setErr] = useState(null);
   const esRef = useRef(null);
@@ -554,16 +595,16 @@ function Ask() {
   const loadReport = (runId) => {
     fetch(controlApi(`/runs/${runId}/report`))
       .then(r => r.json())
-      .then(report => setClaims(report.claims.map(c => ({
-        t: c.text, v: c.verdict, s: c.sourceUrl, tier: c.tier, e: c.evidencePassage,
+      .then(report => { setConclusion(report.conclusion || null); setClaims(report.claims.map(c => ({
+        id: c.id, t: c.text, v: c.verdict, s: c.sourceUrl, tier: c.tier, e: c.evidencePassage,
         sec: c.section, orig: c.originalText, corr: c.correction
-      }))))
+      }))); })
       .catch(() => setErr('The run finished but its answer could not be loaded.'));
   };
 
   const reset = () => {
     if (esRef.current) { esRef.current.close(); esRef.current = null; }
-    setPhase('idle'); setWorkers([]); setFeed([]); setClaims([]); setFinal(null); setErr(null); setQuestion('');
+    setPhase('idle'); setWorkers([]); setFeed([]); setClaims([]); setConclusion(null); setFinal(null); setErr(null); setQuestion('');
   };
 
   const run = (e) => {
@@ -571,7 +612,7 @@ function Ask() {
     const q = question.trim();
     if (!q) return;
     if (esRef.current) { esRef.current.close(); esRef.current = null; }
-    setAsked(q); setClaims([]); setErr(null); setWorkers([]); setFeed([]); setFinal(null);
+    setAsked(q); setClaims([]); setConclusion(null); setErr(null); setWorkers([]); setFeed([]); setFinal(null);
     setPhase('plan');
     window.scrollTo(0, 0);
 
@@ -646,7 +687,7 @@ function Ask() {
     <${Stages} phase=${phase} />
 
     ${answered
-      ? html`<${Answer} claims=${claims} final=${final} />
+      ? html`<${Answer} claims=${claims} final=${final} conclusion=${conclusion} />
           <details class="how">
             <summary><span class="av sm a-planner">P</span>How this answer was made · ${feed.length} steps by ${workers.length + 3} agents</summary>
             <div class="inner"><${Workspace} workers=${workers} feed=${feed} running=${false} phase=${phase} /></div>
