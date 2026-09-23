@@ -21,6 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,15 +89,25 @@ public class WriterService {
         activity.record(runId, null, "WRITER", "Collected " + findings.size()
                 + " research answers; breaking each into short statements tied to one source");
 
-        for (ResearchFinding finding : findings) {
-            if (finding.confidence() <= 0 || finding.sources().isEmpty()) {
-                // Nothing to extract -- an UNANSWERABLE or source-less finding
-                // has no checkable claims, not even a low-confidence one.
-                continue;
+        // Nothing to extract from an UNANSWERABLE or source-less finding -- it has
+        // no checkable claims, not even a low-confidence one.
+        List<ResearchFinding> answered = findings.stream()
+                .filter(f -> f.confidence() > 0 && !f.sources().isEmpty())
+                .toList();
+        // The LLM calls are independent, so they run at once (was ~90s one after
+        // another). Only the calls go to worker threads; every write below stays on
+        // this thread, inside this method's transaction.
+        List<CompletableFuture<List<ExtractedClaim>>> pending = new ArrayList<>();
+        try (ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, answered.size()))) {
+            for (ResearchFinding finding : answered) {
+                pending.add(CompletableFuture.supplyAsync(() -> extractClaims(finding), pool));
             }
+        }
 
+        for (int i = 0; i < answered.size(); i++) {
+            ResearchFinding finding = answered.get(i);
             Map<String, UUID> sourceIdByUrl = upsertSources(runId, finding.sources());
-            List<ExtractedClaim> extracted = extractClaims(finding);
+            List<ExtractedClaim> extracted = pending.get(i).join();
 
             for (ExtractedClaim claim : extracted) {
                 UUID sourceId = sourceIdByUrl.get(claim.sourceUrl());

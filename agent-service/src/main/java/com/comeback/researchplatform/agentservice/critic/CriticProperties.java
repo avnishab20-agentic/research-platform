@@ -11,4 +11,4 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "critic")
 public record CriticProperties(int batchSize, int topKPassages, double unsupportedRatioThreshold,
-                               int maxCorrections) {}
+                               int maxCorrections, int parallelCalls) {}

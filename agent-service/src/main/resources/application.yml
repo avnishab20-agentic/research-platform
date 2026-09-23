@@ -111,6 +111,9 @@ critic:
   # rewrite attempt per run. guardrails.run.max-critic-rounds: 1 turns the
   # round off entirely.
   max-corrections: 3
+  # Grading batches sent to the model at once. 40 claims / 15 per batch = 3 calls,
+  # so 5 covers a whole run in one round.
+  parallel-calls: 5
 
 fixtures:
   # Off by default -- a normal live run costs real DeepSeek/search credits

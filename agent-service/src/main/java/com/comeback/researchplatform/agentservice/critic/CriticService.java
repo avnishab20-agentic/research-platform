@@ -22,6 +22,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -107,8 +110,9 @@ public class CriticService {
                 + " sources to check " + verifiable.size() + " statements");
         refetchSources(runId, claims);
 
-        Map<UUID, Verdict> verdicts = new HashMap<>();
-        Map<UUID, String> evidenceByClaimId = new HashMap<>();
+        // Concurrent: gradeAll fills these from several threads at once.
+        Map<UUID, Verdict> verdicts = new ConcurrentHashMap<>();
+        Map<UUID, String> evidenceByClaimId = new ConcurrentHashMap<>();
         gradeAll(runId, verifiable, verdicts, evidenceByClaimId);
         say(runId, "First check: " + tally(verifiable, verdicts));
 
@@ -244,9 +248,20 @@ public class CriticService {
 
     private void gradeAll(UUID runId, List<ClaimRow> verifiable,
                            Map<UUID, Verdict> verdicts, Map<UUID, String> evidenceByClaimId) {
-        for (int i = 0; i < verifiable.size(); i += props.batchSize()) {
-            List<ClaimRow> batch = verifiable.subList(i, Math.min(i + props.batchSize(), verifiable.size()));
-            gradeBatch(runId, batch, verdicts, evidenceByClaimId);
+        // Batches are independent LLM calls, so they run in parallel (was ~190s one
+        // after another). close() waits for all of them; gradeBatch never throws past
+        // its own catch, and a batch that dies anyway leaves its claims UNREACHABLE.
+        try (ExecutorService pool = Executors.newFixedThreadPool(props.parallelCalls())) {
+            for (int i = 0; i < verifiable.size(); i += props.batchSize()) {
+                List<ClaimRow> batch = verifiable.subList(i, Math.min(i + props.batchSize(), verifiable.size()));
+                pool.submit(() -> {
+                    try {
+                        gradeBatch(runId, batch, verdicts, evidenceByClaimId);
+                    } catch (RuntimeException e) {
+                        log.warn("Grading batch failed in run {}", runId, e);
+                    }
+                });
+            }
         }
     }
 
@@ -301,9 +316,12 @@ public class CriticService {
             if (grades != null) {
                 for (ClaimGrade grade : grades) {
                     UUID claimId = indexToClaimId.get(grade.index());
-                    if (claimId != null) {
+                    if (claimId != null && grade.verdict() != null) {
                         verdicts.put(claimId, grade.verdict());
-                        evidenceByClaimId.put(claimId, grade.evidencePassage());
+                        // ConcurrentHashMap rejects null values; a missing passage is just absent.
+                        if (grade.evidencePassage() != null) {
+                            evidenceByClaimId.put(claimId, grade.evidencePassage());
+                        }
                     }
                 }
             }
