@@ -132,8 +132,8 @@ function Topology({phase, activeWorkers}) {
           <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
         <linearGradient id="topo-glass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="rgba(255,255,255,.07)" />
-          <stop offset="100%" stop-color="rgba(255,255,255,.02)" />
+          <stop offset="0%" style=${{stopColor:'color-mix(in srgb,var(--txt) 7%,transparent)'}} />
+          <stop offset="100%" style=${{stopColor:'color-mix(in srgb,var(--txt) 2%,transparent)'}} />
         </linearGradient>
         ${['violet', 'cyan', 'amber', 'lime'].map(h => html`
           <marker key=${h} id=${'ar-' + h} viewBox="0 0 8 8" refX="7" refY="4"
@@ -142,7 +142,7 @@ function Topology({phase, activeWorkers}) {
           </marker>`)}
         <marker id="ar-dim" viewBox="0 0 8 8" refX="7" refY="4"
                 markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-          <path d="M0,0 L8,4 L0,8 z" fill="rgba(255,255,255,.45)" />
+          <path d="M0,0 L8,4 L0,8 z" style=${{fill:'color-mix(in srgb,var(--txt) 45%,transparent)'}} />
         </marker>
       </defs>
 
@@ -181,7 +181,7 @@ const CSS = `
 .topo { display:block; width:100%; aspect-ratio: 920 / 420; overflow: visible; }
 
 .edge {
-  stroke: rgba(255,255,255,.30);
+  stroke: color-mix(in srgb,var(--txt) 30%,transparent);
   stroke-width: 1.3;
   transition: stroke .5s ease, stroke-width .5s ease, opacity .5s ease;
   opacity: 1;
@@ -197,7 +197,7 @@ const CSS = `
 
 .node-box {
   fill: url(#topo-glass);
-  stroke: rgba(255,255,255,.28);
+  stroke: color-mix(in srgb,var(--txt) 28%,transparent);
   stroke-width: 1.1;
   transition: stroke .5s ease, opacity .5s ease, filter .5s ease;
 }
@@ -227,7 +227,7 @@ const CSS = `
 }
 .node.on .node-sub { fill: var(--txt-2); }
 
-.chip rect { fill: rgba(255,255,255,.05); stroke: rgba(255,255,255,.22); stroke-width: 1; transition: all .4s ease; }
+.chip rect { fill: color-mix(in srgb,var(--txt) 5%,transparent); stroke: color-mix(in srgb,var(--txt) 22%,transparent); stroke-width: 1; transition: all .4s ease; }
 .chip text {
   fill: var(--txt-2);
   font: 400 7px/1 var(--mono);
@@ -235,7 +235,7 @@ const CSS = `
   text-anchor: middle;
   transition: fill .4s ease;
 }
-.chip.lit rect { fill: rgba(251,191,36,.16); stroke: var(--amber); }
+.chip.lit rect { fill: color-mix(in srgb,var(--amber) 16%,transparent); stroke: var(--amber); }
 .chip.lit text { fill: var(--amber); }
 
 /* done: the whole board settles green, and the flow animation stops rather

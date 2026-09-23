@@ -24,10 +24,10 @@
   // ordering. Adjacent steps look similar, which is fine because every bar is
   // directly labelled with its tier name and count.
   const TIER = [
-    {n: 1, c: '#cffafe', label: 'Tier 1 · Official'},
-    {n: 2, c: '#67e8f9', label: 'Tier 2 · Major press'},
-    {n: 3, c: '#22d3ee', label: 'Tier 3 · General'},
-    {n: 4, c: '#0891b2', label: 'Tier 4 · Low trust'}
+    {n: 1, c: 'var(--t1)', label: 'Tier 1 · Official'},
+    {n: 2, c: 'var(--t2)', label: 'Tier 2 · Major press'},
+    {n: 3, c: 'var(--t3)', label: 'Tier 3 · General'},
+    {n: 4, c: 'var(--t4)', label: 'Tier 4 · Low trust'}
   ];
 
   const TONE = {violet: 'var(--violet)', cyan: 'var(--cyan)', lime: 'var(--lime)',
@@ -50,7 +50,7 @@
   border:1px dashed var(--edge);border-radius:10px;background:var(--panel);
   font:400 12px/1 system-ui,sans-serif}
 .cx-tip{position:absolute;z-index:20;transform:translate(-50%,-100%);pointer-events:none;
-  background:#0d0d16;border:1px solid var(--edge-2);border-radius:8px;padding:6px 9px;
+  background:var(--surface-2);border:1px solid var(--edge-2);border-radius:8px;padding:6px 9px;
   color:var(--txt);font:400 11px/1.45 system-ui,sans-serif;white-space:nowrap;
   box-shadow:0 8px 24px rgba(0,0,0,.55)}
 .cx-tip b{font-weight:600}
@@ -333,7 +333,7 @@
             ${hover != null ? html`<circle cx=${x(hover)} cy=${y(pts[hover])} r="3.5"
               fill="var(--cyan)"/>` : null}
             <circle cx=${x(pts.length - 1)} cy=${y(last)} r="4" fill="var(--cyan)"
-                    stroke="#05050a" stroke-width="2"/>
+                    stroke="var(--bg)" stroke-width="2"/>
           </svg>
           <div style=${{font: '500 13px/1 var(--mono)', color: 'var(--txt)'}}>
             ${Math.round(last)}<span style=${{color: 'var(--txt-3)', fontSize: '10px',

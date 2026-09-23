@@ -222,7 +222,7 @@ function Retrieve({onQuota, onExtractUrl}) {
       <div class="list">
         ${res.results.map((r, i) => html`
           <div class="item glass rise" key=${r.url + i}
-               style=${{animationDelay: `${Math.min(i, 12) * .045}s`, '--accent': ['', '#cffafe', '#7dd3fc', '#94a3b8', '#fda4af'][r.tier]}}>
+               style=${{animationDelay: `${Math.min(i, 12) * .045}s`, '--accent': `var(--t${r.tier})`}}>
             <div class="rail-l" />
             <h4>${r.title || '(untitled)'}<span class="tier t${r.tier}">${TIER_NAME[r.tier] || `Tier ${r.tier}`}</span></h4>
             <a class="url" href=${r.url} target="_blank" rel="noopener noreferrer">${r.url}</a>
@@ -655,10 +655,10 @@ function Ask() {
 /* ------------------------------------------------------------------- shell */
 
 const NAV = [
-  ['verify', 'Ask'],
-  ['overview', 'How it works'],
-  ['retrieve', 'Web search'],
-  ['extract', 'Read a page']
+  ['verify', 'Ask', '✦'],
+  ['retrieve', 'Web search', '⌕'],
+  ['extract', 'Read a page', '❏'],
+  ['overview', 'How it works', '◈']
 ];
 const IDS = NAV.map(n => n[0]);
 
@@ -670,6 +670,11 @@ function App() {
   const setView = (v) => { location.hash = v; setViewState(v); window.scrollTo(0, 0); };
   const [quota, setQuota] = useState(null);
   const [seedUrl, setSeedUrl] = useState(null);
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'dark');
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('theme', theme); } catch {}
+  }, [theme]);
 
   const loadQuota = useCallback(async () => {
     try { setQuota((await (await fetch(api('/quota'))).json()).creditsRemaining); }
@@ -694,15 +699,20 @@ function App() {
   // All views stay mounted; switching tabs only hides them, so state survives.
   const pane = (id, el) => html`<div key=${id} hidden=${view !== id}>${el}</div>`;
 
-  return html`<div>
-    <header class="top">
+  return html`<div class="shell">
+    <aside class="side">
       <div class="brand"><span class="mark" />Research Platform</div>
       <nav class="tabs">
-        ${NAV.map(([id, label]) => html`<button class="tab ${view === id ? 'on' : ''}" key=${id}
-          aria-current=${view === id ? 'page' : null} onClick=${() => setView(id)}>${label}</button>`)}
+        ${NAV.map(([id, label, ic]) => html`<button class="tab ${view === id ? 'on' : ''}" key=${id}
+          aria-current=${view === id ? 'page' : null} onClick=${() => setView(id)}><span class="ic" aria-hidden="true">${ic}</span>${label}</button>`)}
       </nav>
-      ${quota != null && html`<div class="meta">${quota} search credits left today</div>`}
-    </header>
+      <div class="foot">
+        ${quota != null && html`<div class="meta"><b>${quota}</b> search credits left today</div>`}
+        <button class="theme" onClick=${() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          aria-label=${`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+          ${theme === 'dark' ? '☾ Dark' : '☀ Light'}<span class="sw" /></button>
+      </div>
+    </aside>
     <main class="main">
       ${pane('verify', html`<${Ask} />`)}
       ${pane('overview', html`<${HowItWorks} onNav=${setView} />`)}
