@@ -15,4 +15,15 @@ public class SearxngClientConfig {
                 .baseUrl(baseUrl)
                 .build();
     }
+
+    // Tavily's /search returns results[] with url/title/content -- the same shape
+    // as SearXNG's JSON, so SearxngSearchResponse maps it unchanged.
+    @Bean
+    public RestClient tavilyRestClient(@Value("${tavily.base-url:https://api.tavily.com}") String baseUrl,
+                                       @Value("${tavily.api-key:}") String apiKey) {
+        return RestClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader("Authorization", "Bearer " + apiKey)
+                .build();
+    }
 }

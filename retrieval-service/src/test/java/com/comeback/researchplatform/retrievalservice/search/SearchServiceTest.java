@@ -69,7 +69,7 @@ class SearchServiceTest {
                 List.of("*.blogspot.*")));
 
         searchService = new SearchService(
-                tierResolver, builder.build(), redis, objectMapper, quotaService);
+                tierResolver, builder.build(), RestClient.create(), "", redis, objectMapper, quotaService);
     }
 
     /**
@@ -102,6 +102,17 @@ class SearchServiceTest {
 
         verify(valueOps).set(anyString(), anyString(), eq(Duration.ofHours(24)));
         verify(quotaService).recordSpend();
+    }
+
+    @Test
+    void anEmptyResultIsNeverCached() {
+        // A CAPTCHA'd engine returns zero results; caching that blinds the query for 24h.
+        when(valueOps.get(anyString())).thenReturn(null);
+        searxngReturns("rbi");
+
+        assertThat(searchService.search(request("rbi", 10, 4, null)).results()).isEmpty();
+
+        verify(valueOps, never()).set(anyString(), anyString(), any(Duration.class));
     }
 
     @Test
@@ -211,7 +222,7 @@ class SearchServiceTest {
 
         // Version bump is how a key-format change is rolled out; the provider segment is
         // there so adding a second search engine later doesn't force a cache-wide flush.
-        assertThat(key.getValue()).startsWith("search:v1:searxng:");
-        assertThat(key.getValue()).hasSize("search:v1:searxng:".length() + 16);
+        assertThat(key.getValue()).startsWith("search:v2:searxng:");
+        assertThat(key.getValue()).hasSize("search:v2:searxng:".length() + 16);
     }
 }

@@ -91,8 +91,10 @@ public class CriticService {
     public void verify(UUID runId) {
         List<ClaimRow> claims = loadClaims(runId);
         if (claims.isEmpty()) {
-            jdbc.update("UPDATE runs SET status = 'VERIFIED', updated_at = now() WHERE id = ?", runId);
-            log.info("Run {} has no claims to verify; marked VERIFIED (vacuously)", runId);
+            // Nothing was checked, so nothing is verified -- an empty report is a failed
+            // run, published as such rather than dressed up as a pass.
+            jdbc.update("UPDATE runs SET status = 'UNVERIFIED', updated_at = now() WHERE id = ?", runId);
+            log.info("Run {} has no claims to verify; marked UNVERIFIED", runId);
             return;
         }
 

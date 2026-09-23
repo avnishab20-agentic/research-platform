@@ -1,7 +1,18 @@
 # Read the documentation before extending the defaults:
 # https://docs.searxng.org/admin/settings/
 
-use_default_settings: true
+# From the AKS (Azure datacenter) IP, DuckDuckGo/Qwant answer with CAPTCHAs and
+# Brave/Mojeek/Startpage with "too many requests" -- every search came back empty
+# and every run ended with 0 claims (probed 2026-09-23). Keep only the engines that
+# still answered from there. Tavily (retrieval-service tavily.api-key) replaces
+# SearXNG entirely when a key is configured.
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - bing
+      - yahoo
+      - wikipedia
 
 server:
   secret_key: "slV962W42Em0Gz5aWsG2leRY5e8YN"
