@@ -92,7 +92,10 @@ public class ConclusionWriter {
                 + "no outside knowledge. answer: 2-3 plain sentences that directly answer the question. "
                 + "takeaways: 3-5 short, distinct points, each merging related statements instead of "
                 + "repeating them. Every answer sentence and every takeaway must cite the numbers of the "
-                + "statements it rests on (answerCites, cites). If statements disagree, say so.";
+                + "statements it rests on (answerCites, cites), in those fields only -- never write "
+                + "numbers or brackets in the text itself. Cite the few statements that best support "
+                + "each point, not every related one. Keep each takeaway to one sentence. "
+                + "If statements disagree, say so.";
         String user = "Question: " + question + "\n\nStatements:\n" + numbered;
         ResponseEntity<ChatResponse, Draft> result = chatClient.prompt()
                 .system(system)
@@ -116,14 +119,22 @@ public class ConclusionWriter {
         for (DraftTakeaway t : Objects.requireNonNullElse(draft.takeaways(), List.<DraftTakeaway>of())) {
             List<UUID> ids = ids(t.cites(), passed);
             if (t.text() != null && !t.text().isBlank() && !ids.isEmpty()) {
-                takeaways.add(new Takeaway(t.text().trim(), ids));
+                takeaways.add(new Takeaway(clean(t.text()), ids));
             }
         }
         List<UUID> answerIds = ids(draft.answerCites(), passed);
         if (answerIds.isEmpty() && takeaways.isEmpty()) {
             return null;
         }
-        return new Conclusion(draft.answer().trim(), answerIds, takeaways);
+        return new Conclusion(clean(draft.answer()), answerIds, takeaways);
+    }
+
+    // The model sometimes writes "[2,3,4]" into the prose as well as the cites field;
+    // the page renders citations itself, so inline ones would show twice.
+    private static final java.util.regex.Pattern INLINE_CITES = java.util.regex.Pattern.compile("\\s*\\[[\\d,\\s–-]+]");
+
+    static String clean(String text) {
+        return INLINE_CITES.matcher(text).replaceAll("").trim();
     }
 
     private static List<UUID> ids(List<Integer> cites, List<ClaimRow> passed) {

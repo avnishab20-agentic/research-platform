@@ -474,9 +474,14 @@ function Answer({claims, final, conclusion}) {
     setSel(c);
     setTimeout(() => document.getElementById('st-' + num.get(c))?.scrollIntoView({behavior: 'smooth', block: 'center'}), 60);
   };
-  const Cites = ({ids}) => html`<span class="cites">${(ids || []).map(id => byId.get(id)).filter(Boolean).map(c =>
-    html`<button type="button" class="cite t-${verdictOf(c.v).tone}" key=${c.id} title=${c.t}
-      onClick=${() => focus(c)}>${num.get(c)}</button>`)}</span>`;
+  // At most 5 chips per sentence; the rest collapse into "+N" so a broad claim doesn't bury the text.
+  const Cites = ({ids}) => {
+    const cs = (ids || []).map(id => byId.get(id)).filter(Boolean);
+    return html`<span class="cites">${cs.slice(0, 5).map(c =>
+      html`<button type="button" class="cite t-${verdictOf(c.v).tone}" key=${c.id} title=${c.t}
+        onClick=${() => focus(c)}>${num.get(c)}</button>`)}${cs.length > 5 && html`<span class="cite more-c"
+        title=${cs.slice(5).map(c => num.get(c)).join(', ')}>+${cs.length - 5}</span>`}</span>`;
+  };
 
   return html`<div class="fade answer">
     ${conclusion && html`<section class="concl rise">

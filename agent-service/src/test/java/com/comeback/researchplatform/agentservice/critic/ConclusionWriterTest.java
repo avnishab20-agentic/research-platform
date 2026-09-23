@@ -38,4 +38,10 @@ class ConclusionWriterTest {
         assertThat(ConclusionWriter.resolve(new Draft(" ", List.of(1), List.of()), passed)).isNull();
         assertThat(ConclusionWriter.resolve(null, passed)).isNull();
     }
+
+    @Test
+    void inlineBracketCitationsAreStrippedFromTheText() {
+        assertThat(ConclusionWriter.clean("Gyms help [2,3, 4]. They also build community [60-62]."))
+                .isEqualTo("Gyms help. They also build community.");
+    }
 }
