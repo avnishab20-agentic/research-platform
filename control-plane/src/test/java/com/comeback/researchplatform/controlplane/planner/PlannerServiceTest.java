@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -40,7 +41,7 @@ class PlannerServiceTest {
         when(requestSpec.call()).thenReturn(callSpec);
         when(callSpec.content()).thenReturn(responseText);
 
-        PlannerProperties props = new PlannerProperties(3, MAX_FAN_OUT, Duration.ofMinutes(3));
+        PlannerProperties props = new PlannerProperties(3, MAX_FAN_OUT, Duration.ofMinutes(3), 20);
         Environment environment = mock(Environment.class);
         return new PlannerService(builder, mock(JdbcTemplate.class), mock(KafkaTemplate.class), props,
                 mock(PlannerFixtureStore.class), false, environment);
@@ -68,5 +69,20 @@ class PlannerServiceTest {
     @Test
     void nullResponseYieldsNoSubQuestions() {
         assertThat(serviceReturning(null).decompose("some question")).isEmpty();
+    }
+
+    @Test
+    void theDailyRunCapRefusesBeforeAnyRunIsCreatedOrLlmCalled() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), org.mockito.ArgumentMatchers.eq(Integer.class))).thenReturn(20);
+        ChatClient.Builder builder = mock(ChatClient.Builder.class);
+        PlannerService service = new PlannerService(builder, jdbc, mock(KafkaTemplate.class),
+                new PlannerProperties(3, MAX_FAN_OUT, Duration.ofMinutes(3), 20),
+                mock(PlannerFixtureStore.class), false, mock(Environment.class));
+
+        assertThatThrownBy(() -> service.submit("q"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("429");
+        org.mockito.Mockito.verify(jdbc, org.mockito.Mockito.never()).update(anyString(), org.mockito.ArgumentMatchers.<Object[]>any());
     }
 }

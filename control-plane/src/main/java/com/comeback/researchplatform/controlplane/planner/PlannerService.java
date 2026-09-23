@@ -12,7 +12,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -58,6 +60,13 @@ public class PlannerService {
 
     @Transactional
     public UUID submit(String question) {
+        Integer today = jdbc.queryForObject(
+                "SELECT count(*) FROM runs WHERE created_at > now() - interval '24 hours'", Integer.class);
+        if (today != null && today >= props.maxRunsPerDay()) {
+            log.warn("Daily run cap reached ({} runs in 24h); refusing '{}'", today, question);
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "The daily research limit has been reached. Please try again tomorrow.");
+        }
         UUID runId = UUID.randomUUID();
         // Every log line for the rest of this method -- and every log line any
         // downstream service emits once it picks up a message carrying this

@@ -626,7 +626,12 @@ function Ask() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({question: q})
     })
-      .then(r => { if (!r.ok) throw new Error('submit failed'); return r.json(); })
+      .then(async r => {
+        // 429 = the site's daily run cap; show the server's own wording instead of "can't reach".
+        if (r.status === 429) throw new Error((await r.json().catch(() => ({}))).message || 'The daily research limit has been reached.');
+        if (!r.ok) throw new Error('submit failed');
+        return r.json();
+      })
       .then(({runId}) => {
         const es = new EventSource(controlApi(`/runs/${runId}/events`));
         esRef.current = es;
@@ -650,7 +655,8 @@ function Ask() {
           es.close();
         };
       })
-      .catch(() => { setErr('Could not reach the server. Is control-plane running?'); setPhase('idle'); });
+      .catch((e) => { setErr(e.message !== 'submit failed' && !(e instanceof TypeError) ? e.message
+        : 'Could not reach the server. Is control-plane running?'); setPhase('idle'); });
   };
 
   if (phase === 'idle') {

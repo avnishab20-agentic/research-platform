@@ -50,11 +50,14 @@ public class WriterService {
     private final boolean recordMode;
     private final RunActivityLog activity;
 
+    private final WriterProperties props;
+
     public WriterService(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc,
                           ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
                           RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
                           @Value("${fixtures.record-mode:false}") boolean recordMode,
-                          RunActivityLog activity) {
+                          RunActivityLog activity, WriterProperties props) {
+        this.props = props;
         this.activity = activity;
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
@@ -156,7 +159,9 @@ public class WriterService {
         String sourceList = finding.sources().stream()
                 .map(s -> s.url() + " (tier " + s.tier() + ")")
                 .collect(Collectors.joining("\n"));
-        String system = "Break the answer below into atomic, individually-checkable claims. "
+        String system = "Break the answer below into at most " + props.maxClaimsPerFinding()
+                + " atomic, individually-checkable claims -- the most important ones. Never state "
+                + "the same fact twice in different words. "
                 + "Each claim must be a single fact, figure, or quote -- not a "
                 + "compound sentence covering several facts at once. Classify each "
                 + "as FACT, FIGURE, QUOTE, or INFERENCE (your own reasoning or "
@@ -176,7 +181,8 @@ public class WriterService {
                     .responseEntity(new ParameterizedTypeReference<List<ExtractedClaim>>() {});
             recordChat(system + "\n---\n" + user, result.response());
             List<ExtractedClaim> claims = result.entity();
-            return claims != null ? claims : List.of();
+            // The prompt asks for the cap; this enforces it when the model overshoots.
+            return claims != null ? claims.stream().limit(props.maxClaimsPerFinding()).toList() : List.of();
         } catch (Exception e) {
             log.warn("Claim extraction failed for node {}", finding.nodeId(), e);
             return List.of();

@@ -92,20 +92,25 @@ researcher:
   # 90s wall clock, 25k tokens per subtask.
   wall-clock-budget: 90s
   token-budget: 25000
-  max-search-queries: 5
+  max-search-queries: 3
   max-documents-to-extract: 5
-  passages-per-query: 6
+  passages-per-query: 4
+
+writer:
+  # Statements kept per sub-question -- see WriterProperties. 5 researchers x 8 = 40
+  # claims max per run, down from ~90 uncapped.
+  max-claims-per-finding: 8
 
 critic:
   # PLAN's numbers: batch 10 claims per grading call, top-3 passages by
   # cosine, 0.15 unsupported-ratio threshold.
-  batch-size: 10
+  batch-size: 15
   top-k-passages: 3
   unsupported-ratio-threshold: 0.15
   # Re-research round: at most this many failed claims get a fresh search +
   # rewrite attempt per run. guardrails.run.max-critic-rounds: 1 turns the
   # round off entirely.
-  max-corrections: 6
+  max-corrections: 3
 
 fixtures:
   # Off by default -- a normal live run costs real DeepSeek/search credits
@@ -123,7 +128,7 @@ guardrails:
   run:
     max-wall-clock: 10m
     max-searches: 40
-    max-llm-calls: 60
+    max-llm-calls: 35
     max-subquestions: 5
     max-critic-rounds: 2
     on-breach: PARTIAL
