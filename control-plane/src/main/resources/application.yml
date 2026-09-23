@@ -46,8 +46,10 @@ spring:
       concurrency: 6
 
 planner:
-  min-fan-out: 6
-  max-fan-out: 8
+  # 5 researchers per run: fewer, better-sourced answers beat 8 thin ones,
+  # and it caps a run at ~25 Tavily credits (5 queries each).
+  min-fan-out: 5
+  max-fan-out: 5
   level-deadline: 3m
 
 server:

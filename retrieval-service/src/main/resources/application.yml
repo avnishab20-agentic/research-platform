@@ -26,7 +26,7 @@ guardrails:
     max-wall-clock: 10m
     max-searches: 40
     max-llm-calls: 60
-    max-subquestions: 8
+    max-subquestions: 5
     max-critic-rounds: 2
     on-breach: PARTIAL
 
