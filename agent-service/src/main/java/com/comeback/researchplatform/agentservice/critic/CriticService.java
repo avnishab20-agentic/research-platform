@@ -1,6 +1,8 @@
 package com.comeback.researchplatform.agentservice.critic;
 
+import com.comeback.researchplatform.agentservice.activity.RunActivityLog;
 import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
+import com.comeback.researchplatform.common.GuardrailProperties;
 import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
@@ -53,11 +55,19 @@ public class CriticService {
     private final RunUsageGuard runUsageGuard;
     private final FixtureIO fixtureIO;
     private final boolean recordMode;
+    private final ClaimCorrector claimCorrector;
+    private final RunActivityLog activity;
+    private final GuardrailProperties guardrails;
 
     public CriticService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                           PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
                           RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
-                          @Value("${fixtures.record-mode:false}") boolean recordMode) {
+                          @Value("${fixtures.record-mode:false}") boolean recordMode,
+                          ClaimCorrector claimCorrector, RunActivityLog activity,
+                          GuardrailProperties guardrails) {
+        this.claimCorrector = claimCorrector;
+        this.activity = activity;
+        this.guardrails = guardrails;
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
@@ -86,32 +96,105 @@ public class CriticService {
             return;
         }
 
-        refetchSources(runId, claims);
-
         List<ClaimRow> verifiable = claims.stream()
                 .filter(c -> ClaimKind.valueOf(c.kind()) != ClaimKind.INFERENCE)
                 .toList();
+        say(runId, "Re-opening " + claims.stream().map(ClaimRow::sourceUrl).distinct().count()
+                + " sources to check " + verifiable.size() + " statements");
+        refetchSources(runId, claims);
 
         Map<UUID, Verdict> verdicts = new HashMap<>();
         Map<UUID, String> evidenceByClaimId = new HashMap<>();
         gradeAll(runId, verifiable, verdicts, evidenceByClaimId);
+        say(runId, "First check: " + tally(verifiable, verdicts));
 
-        for (ClaimRow claim : verifiable) {
+        // PLAN's round 2: re-research the failed claims only. Deviation from
+        // PLAN's gate: every failed claim is attempted (up to maxCorrections),
+        // not only when the ratio is already over threshold -- one wrong
+        // sentence left standing is still a wrong sentence on the page.
+        Map<UUID, ClaimRow> current = new LinkedHashMap<>();
+        verifiable.forEach(c -> current.put(c.id(), c));
+        Set<UUID> removed = new HashSet<>();
+        int revisedCount = 0;
+        if (guardrails.run().maxCriticRounds() > 1) {
+            List<ClaimRow> failed = verifiable.stream()
+                    .filter(c -> isFailure(verdicts.get(c.id())))
+                    .limit(props.maxCorrections())
+                    .toList();
+            if (!failed.isEmpty()) {
+                say(runId, failed.size() + (failed.size() == 1 ? " statement" : " statements")
+                        + " didn't hold up. Going back to the web to fix "
+                        + (failed.size() == 1 ? "it" : "them"));
+            }
+            List<ClaimRow> revised = new ArrayList<>();
+            for (ClaimRow claim : failed) {
+                say(runId, "Fixing: “" + claim.text() + "”");
+                ClaimCorrector.Outcome outcome = claimCorrector.correct(runId, claim, verdicts.get(claim.id()));
+                switch (outcome.kind()) {
+                    case REVISED -> {
+                        revised.add(outcome.claim());
+                        current.put(claim.id(), outcome.claim());
+                        verdicts.remove(claim.id());
+                        evidenceByClaimId.remove(claim.id());
+                    }
+                    case REMOVED -> removed.add(claim.id());
+                    case UNCHANGED -> { }
+                }
+            }
+            if (!revised.isEmpty()) {
+                // Independent re-grade: the same grading call as round one, not
+                // the corrector vouching for its own rewrite.
+                gradeAll(runId, revised, verdicts, evidenceByClaimId);
+                revisedCount = revised.size();
+                say(runId, "Re-checked the " + revised.size() + " rewritten "
+                        + (revised.size() == 1 ? "statement" : "statements") + ": " + tally(revised, verdicts));
+            }
+        }
+
+        for (ClaimRow claim : current.values()) {
             Verdict verdict = verdicts.getOrDefault(claim.id(), Verdict.UNREACHABLE);
             jdbc.update("INSERT INTO claim_verdicts (claim_id, verdict, evidence_passage) VALUES (?, ?, ?)",
                     claim.id(), verdict.name(), evidenceByClaimId.get(claim.id()));
         }
 
-        double ratio = unsupportedRatio(verdicts.values());
-        // PLAN: "if ratio > 0.15 AND round < 2: re-research the failed claims
-        // ONLY". The re-research round is not implemented this pass -- ratio
-        // above threshold still publishes, banner-marked, per CLAUDE.md's "a
-        // failed run is published, never silently dropped". Documented cut,
-        // not a silent gap.
+        // Ratio over what the reader actually sees: removed claims are gone
+        // from the answer, so they no longer count against it. They stay in
+        // the report (as "removed") so the removal itself is visible.
+        List<Verdict> published = current.keySet().stream()
+                .filter(id -> !removed.contains(id))
+                .map(id -> verdicts.getOrDefault(id, Verdict.UNREACHABLE))
+                .toList();
+        double ratio = unsupportedRatio(published);
+        // Above threshold still publishes, banner-marked, per CLAUDE.md's "a
+        // failed run is published, never silently dropped".
         String status = ratio > props.unsupportedRatioThreshold() ? "UNVERIFIED" : "VERIFIED";
         jdbc.update("UPDATE runs SET status = ?, updated_at = now() WHERE id = ?", status, runId);
-        log.info("Run {} verified: {} claims graded, unsupported_ratio={}, status={}",
-                runId, verifiable.size(), ratio, status);
+        long confirmed = published.stream().filter(v -> v == Verdict.SUPPORTED).count();
+        say(runId, "Done: " + confirmed + " of " + published.size() + " statements in the answer are confirmed"
+                + (revisedCount > 0 ? ", " + revisedCount + " rewritten" : "")
+                + (removed.isEmpty() ? "" : ", " + removed.size() + " removed"));
+        log.info("Run {} verified: {} claims graded, {} revised, {} removed, unsupported_ratio={}, status={}",
+                runId, verifiable.size(), revisedCount, removed.size(), ratio, status);
+    }
+
+    private static boolean isFailure(Verdict v) {
+        return v == Verdict.UNSUPPORTED || v == Verdict.CONTRADICTED;
+    }
+
+    // Package-visible so CriticServiceTest can pin the wording's arithmetic.
+    static String tally(List<ClaimRow> claims, Map<UUID, Verdict> verdicts) {
+        Map<Verdict, Long> counts = claims.stream().collect(Collectors.groupingBy(
+                c -> verdicts.getOrDefault(c.id(), Verdict.UNREACHABLE), () -> new EnumMap<>(Verdict.class),
+                Collectors.counting()));
+        long failed = counts.getOrDefault(Verdict.UNSUPPORTED, 0L) + counts.getOrDefault(Verdict.CONTRADICTED, 0L);
+        return counts.getOrDefault(Verdict.SUPPORTED, 0L) + " confirmed, "
+                + counts.getOrDefault(Verdict.PARTIAL, 0L) + " partly confirmed, "
+                + failed + " failed, "
+                + counts.getOrDefault(Verdict.UNREACHABLE, 0L) + " couldn't be checked";
+    }
+
+    private void say(UUID runId, String message) {
+        activity.record(runId, null, "CRITIC", message);
     }
 
     private List<ClaimRow> loadClaims(UUID runId) {

@@ -98,6 +98,10 @@ public class PlannerService {
                     + "VALUES (?, ?, 0, ?, 'PENDING')", nodeId, runId, subQuestion);
             nodeIds.add(nodeId);
         }
+        // Activity feed line (run_events, V4) -- the browser's first sign of
+        // what the planner decided, before any researcher reports in.
+        jdbc.update("INSERT INTO run_events (run_id, agent, message) VALUES (?, 'PLANNER', ?)", runId,
+                "Split the question into " + subQuestions.size() + " parts, one researcher each");
 
         // java.sql.Timestamp, not Instant -- the Postgres driver can't infer
         // a SQL type for a raw Instant parameter (see FanInService for the

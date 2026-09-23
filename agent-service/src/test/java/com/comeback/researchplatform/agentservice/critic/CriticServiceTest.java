@@ -25,8 +25,20 @@ class CriticServiceTest {
 
     private final CriticService service = new CriticService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
-            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15), mock(RunUsageGuard.class),
-            mock(FixtureIO.class), false);
+            mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15, 6), mock(RunUsageGuard.class),
+            mock(FixtureIO.class), false, mock(ClaimCorrector.class),
+            mock(com.comeback.researchplatform.agentservice.activity.RunActivityLog.class), null);
+
+    @Test
+    void tallyCountsContradictedAsFailedAndMissingAsUnchecked() {
+        ClaimRow a = new ClaimRow(java.util.UUID.randomUUID(), "a", "FACT", null, "u");
+        ClaimRow b = new ClaimRow(java.util.UUID.randomUUID(), "b", "FACT", null, "u");
+        ClaimRow c = new ClaimRow(java.util.UUID.randomUUID(), "c", "FACT", null, "u");
+        java.util.Map<java.util.UUID, Verdict> verdicts = java.util.Map.of(
+                a.id(), Verdict.SUPPORTED, b.id(), Verdict.CONTRADICTED);
+        assertThat(CriticService.tally(List.of(a, b, c), verdicts))
+                .isEqualTo("1 confirmed, 0 partly confirmed, 1 failed, 1 couldn't be checked");
+    }
 
     @Test
     void allSupportedGivesZeroRatio() {

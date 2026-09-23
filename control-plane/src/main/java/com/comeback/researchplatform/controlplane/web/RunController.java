@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -98,6 +99,7 @@ public class RunController {
         SseEmitter emitter = new SseEmitter(15 * 60 * 1000L);
         ScheduledExecutorService poller = Executors.newSingleThreadScheduledExecutor();
         AtomicReference<String> lastPayload = new AtomicReference<>();
+        AtomicLong lastActivityId = new AtomicLong(0);
 
         ScheduledFuture<?> future = poller.scheduleAtFixedRate(() -> {
             // The poller runs on its own dedicated thread, not the request
@@ -105,6 +107,12 @@ public class RunController {
             // be set here too, not just at the top of events() itself.
             MDC.put("runId", id.toString());
             try {
+                // Activity before progress, so the Critic's closing "Done" line
+                // reaches the browser before a terminal status closes the stream.
+                for (ActivityView activity : activitySince(id, lastActivityId.get())) {
+                    emitter.send(SseEmitter.event().name("activity").data(activity));
+                    lastActivityId.set(activity.id());
+                }
                 RunProgressEvent progress = currentProgress(id);
                 String payload = progress.status() + ":" + progress.completed() + "/" + progress.expected();
                 if (!payload.equals(lastPayload.get())) {
@@ -146,10 +154,19 @@ public class RunController {
         int completed = level.isEmpty() ? 0 : (int) level.get("completed");
         int expected = level.isEmpty() ? 0 : (int) level.get("expected");
         List<WorkerView> workers = jdbc.query(
-                "SELECT sub_question, status FROM dag_nodes WHERE run_id = ? AND level = ? ORDER BY created_at",
-                (rs, rowNum) -> new WorkerView(rs.getString("sub_question"), rs.getString("status")),
+                "SELECT id, sub_question, status FROM dag_nodes WHERE run_id = ? AND level = ? ORDER BY created_at",
+                (rs, rowNum) -> new WorkerView((UUID) rs.getObject("id"), rs.getString("sub_question"),
+                        rs.getString("status")),
                 id, LEVEL);
         return new RunProgressEvent(status, completed, expected, workers);
+    }
+
+    private List<ActivityView> activitySince(UUID runId, long afterId) {
+        return jdbc.query(
+                "SELECT id, node_id, agent, message FROM run_events WHERE run_id = ? AND id > ? ORDER BY id",
+                (rs, rowNum) -> new ActivityView(rs.getLong("id"), (UUID) rs.getObject("node_id"),
+                        rs.getString("agent"), rs.getString("message")),
+                runId, afterId);
     }
 
     /** The finished report -- claims joined to their verdict and source,
@@ -168,7 +185,8 @@ public class RunController {
     private RunReportResponse buildReport(UUID id) {
         RunStatusResponse run = loadStatus(id);
         List<ClaimView> claims = jdbc.query(
-                "SELECT c.text, cv.verdict, s.url AS source_url, s.tier, cv.evidence_passage "
+                "SELECT c.text, cv.verdict, s.url AS source_url, s.tier, cv.evidence_passage, "
+                        + "c.section_heading, c.original_text, c.correction "
                         + "FROM claims c "
                         + "JOIN sources s ON c.source_id = s.id "
                         + "LEFT JOIN claim_verdicts cv ON cv.claim_id = c.id "
@@ -176,7 +194,8 @@ public class RunController {
                 (rs, rowNum) -> new ClaimView(
                         rs.getString("text"),
                         rs.getString("verdict") != null ? rs.getString("verdict") : "UNREACHABLE",
-                        rs.getString("source_url"), rs.getInt("tier"), rs.getString("evidence_passage")),
+                        rs.getString("source_url"), rs.getInt("tier"), rs.getString("evidence_passage"),
+                        rs.getString("section_heading"), rs.getString("original_text"), rs.getString("correction")),
                 id);
         return new RunReportResponse(run.id(), run.question(), run.status(), claims);
     }

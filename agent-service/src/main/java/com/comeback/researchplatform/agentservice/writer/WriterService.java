@@ -1,5 +1,6 @@
 package com.comeback.researchplatform.agentservice.writer;
 
+import com.comeback.researchplatform.agentservice.activity.RunActivityLog;
 import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
 import com.comeback.researchplatform.common.KafkaTopics;
 import com.comeback.researchplatform.common.ClaimsReady;
@@ -47,11 +48,14 @@ public class WriterService {
     private final RunUsageGuard runUsageGuard;
     private final FixtureIO fixtureIO;
     private final boolean recordMode;
+    private final RunActivityLog activity;
 
     public WriterService(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc,
                           ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
                           RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
-                          @Value("${fixtures.record-mode:false}") boolean recordMode) {
+                          @Value("${fixtures.record-mode:false}") boolean recordMode,
+                          RunActivityLog activity) {
+        this.activity = activity;
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
@@ -75,6 +79,8 @@ public class WriterService {
     public void write(UUID runId) {
         List<ResearchFinding> findings = loadFindings(runId);
         int claimsWritten = 0;
+        activity.record(runId, null, "WRITER", "Collected " + findings.size()
+                + " research answers; breaking each into short statements tied to one source");
 
         for (ResearchFinding finding : findings) {
             if (finding.confidence() <= 0 || finding.sources().isEmpty()) {
@@ -99,7 +105,11 @@ public class WriterService {
                         runId, finding.nodeId(), finding.subQuestion(), claim.text(), sourceId, claim.kind().name());
                 claimsWritten++;
             }
+            activity.record(runId, finding.nodeId(), "WRITER",
+                    "Wrote " + extracted.size() + " statements for “" + finding.subQuestion() + "”");
         }
+        activity.record(runId, null, "WRITER", "Handed " + claimsWritten
+                + " statements to the fact-checker");
 
         jdbc.update("UPDATE runs SET status = 'CLAIMS_READY', updated_at = now() WHERE id = ?", runId);
         log.info("Run {} written: {} claims from {} findings", runId, claimsWritten, findings.size());

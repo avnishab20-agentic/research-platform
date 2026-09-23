@@ -1,5 +1,6 @@
 package com.comeback.researchplatform.agentservice.researcher;
 
+import com.comeback.researchplatform.agentservice.activity.RunActivityLog;
 import com.comeback.researchplatform.agentservice.config.ResearcherProperties;
 import com.comeback.researchplatform.agentservice.fixtures.FixtureIO;
 import com.comeback.researchplatform.agentservice.guardrail.RunUsageGuard;
@@ -54,11 +55,12 @@ public class ResearcherService {
     private final FixtureIO fixtureIO;
     private final boolean recordMode;
     private final RunUsageGuard runUsageGuard;
+    private final RunActivityLog activity;
 
     public ResearcherService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                               PassageStore passageStore, ResearcherProperties props, FixtureIO fixtureIO,
                               @Value("${fixtures.record-mode:false}") boolean recordMode,
-                              RunUsageGuard runUsageGuard) {
+                              RunUsageGuard runUsageGuard, RunActivityLog activity) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
@@ -66,6 +68,11 @@ public class ResearcherService {
         this.fixtureIO = fixtureIO;
         this.recordMode = recordMode;
         this.runUsageGuard = runUsageGuard;
+        this.activity = activity;
+    }
+
+    private void say(ResearchSubtask subtask, String message) {
+        activity.record(subtask.runId(), subtask.nodeId(), "RESEARCHER", message);
     }
 
     // Inline, not a ChatModel decorator -- found live that wrapping ChatModel
@@ -90,18 +97,25 @@ public class ResearcherService {
         if (queries.isEmpty() || overBudget(start)) {
             return partial(subtask, "Could not generate search queries in time.", List.of());
         }
+        say(subtask, "Searching the web for: " + String.join(" · ", queries));
 
         // Steps 2-3: search, dedupe, tier filtering happens server-side via minTier.
         List<SearchResult> results = search(subtask.runId(), queries);
         if (overBudget(start)) {
             return partial(subtask, "Search budget/time exceeded before extraction.", List.of());
         }
+        say(subtask, "Found " + results.size() + " results; opening the top "
+                + Math.min(results.size(), props.maxDocumentsToExtract()) + " pages");
 
         // Step 4: extract the clean text of the top documents.
         List<ExtractedDocument> documents = extractTopDocuments(results);
         List<ExtractedDocument> usable = documents.stream()
                 .filter(d -> "OK".equals(d.status()) && d.text() != null && !d.text().isBlank())
                 .toList();
+        if (!usable.isEmpty()) {
+            say(subtask, "Read " + usable.size() + " of " + documents.size() + " pages: "
+                    + usable.stream().map(d -> host(d.url())).distinct().collect(Collectors.joining(", ")));
+        }
         if (usable.isEmpty() || overBudget(start)) {
             return partial(subtask, "No extractable sources found for this sub-question.", List.of());
         }
@@ -145,6 +159,10 @@ public class ResearcherService {
         } else {
             finalAnswer = answer;
         }
+        say(subtask, unanswerable || answer == null
+                ? "Couldn't find an answer in what it read"
+                : "Wrote an answer from the " + passages.size() + " most relevant passages across "
+                        + sources.size() + (sources.size() == 1 ? " source" : " sources"));
 
         return new ResearchFinding(
                 subtask.runId(), subtask.nodeId(), subtask.subQuestion(),
@@ -265,8 +283,18 @@ public class ResearcherService {
 
     private ResearchFinding partial(ResearchSubtask subtask, String reason, List<SourceRef> sources) {
         log.info("Sub-question '{}' finished PARTIAL: {}", subtask.subQuestion(), reason);
+        say(subtask, "Stopped early: " + reason);
         return new ResearchFinding(subtask.runId(), subtask.nodeId(), subtask.subQuestion(),
                 reason, sources, 0.0, STATUS_PARTIAL);
+    }
+
+    static String host(String url) {
+        try {
+            String h = java.net.URI.create(url).getHost();
+            return h == null ? url : h.replaceFirst("^www\\.", "");
+        } catch (IllegalArgumentException e) {
+            return url;
+        }
     }
 
     /** Tracks cumulative token usage across a subtask's LLM calls. DeepSeek's

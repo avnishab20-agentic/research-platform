@@ -102,6 +102,10 @@ critic:
   batch-size: 10
   top-k-passages: 3
   unsupported-ratio-threshold: 0.15
+  # Re-research round: at most this many failed claims get a fresh search +
+  # rewrite attempt per run. guardrails.run.max-critic-rounds: 1 turns the
+  # round off entirely.
+  max-corrections: 6
 
 fixtures:
   # Off by default -- a normal live run costs real DeepSeek/search credits
