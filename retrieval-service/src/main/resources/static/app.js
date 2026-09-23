@@ -386,7 +386,10 @@ const msgKind = (a) => a.agent !== 'CRITIC' ? ''
 
 function Stages({phase}) {
   const idx = ORDER.indexOf(phase);
+  // Fill reaches the middle of the active step, the far end once everything is done.
+  const pct = phase === 'done' ? 100 : Math.max(0, (idx - 1 + .5) / TEAM.length * 100);
   return html`<div class="stages">
+    <div class="rail" aria-hidden="true"><i style=${{width: pct + '%'}} /></div>
     ${TEAM.map(m => {
       const si = ORDER.indexOf(m.phase);
       const st = idx > si ? 'done' : idx === si ? 'active' : '';
@@ -410,7 +413,9 @@ function Workspace({workers, feed, running, phase}) {
       <div class="panel-h"><span class="av sm a-researcher">R</span>Researchers · ${workers.filter(w => w.done).length} of ${workers.length} done</div>
       <div class="rcards">
         ${workers.length === 0 && html`<div class="rcard"><div class="last">Waiting for the planner to hand out questions…</div></div>`}
-        ${workers.map((w, i) => html`<div class="rcard ${w.done ? 'done' : ''}" key=${w.id || i}>
+        ${workers.map((w, i) => html`<div class="rcard ${w.done ? 'done' : 'busy'}" key=${w.id || i}
+            style=${{animationDelay: `${i * .06}s`}}>
+          <span class="num" aria-hidden="true">${w.done ? '✓' : i + 1}</span>
           <div class="top-l"><span>Researcher ${i + 1}</span>
             <span class="st">${w.done ? html`<span style=${{color: 'var(--teal)'}}>✓ done</span>` : html`<span class="spinner" />working`}</span></div>
           <div class="q">${w.q}</div>
@@ -423,14 +428,15 @@ function Workspace({workers, feed, running, phase}) {
       <div class="card glass" style=${{padding: 8}}>
         <div class="feed" ref=${feedRef} aria-live="polite">
           ${feed.length === 0 && html`<div class="typing"><span class="spinner" />Starting up…</div>`}
-          ${feed.map(a => {
+          ${feed.map((a, i) => {
             const s = speaker(a, workers);
-            return html`<div class="msg ${msgKind(a)} ${s.cls}" key=${a.id}>
+            const cont = i > 0 && speaker(feed[i - 1], workers).name === s.name;
+            return html`<div class="msg ${msgKind(a)} ${s.cls} ${cont ? 'cont' : ''}" key=${a.id}>
               <span class="av sm ${s.cls}">${s.short}</span>
               <div class="body"><div class="who">${s.name}</div><div class="txt">${a.message}</div></div>
             </div>`;
           })}
-          ${running && feed.length > 0 && current && html`<div class="typing"><span class="spinner" />${current.name} ${current.name.endsWith('s') ? 'are' : 'is'} working…</div>`}
+          ${running && feed.length > 0 && current && html`<div class="typing"><span class="spinner" />${current.name} ${current.name.endsWith('s') ? 'are' : 'is'} working</div>`}
         </div>
       </div>
     </div>
@@ -671,6 +677,15 @@ function App() {
   const [quota, setQuota] = useState(null);
   const [seedUrl, setSeedUrl] = useState(null);
   const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || 'dark');
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    const apply = () => {
+      document.documentElement.dataset.theme = next;
+      ReactDOM.flushSync(() => setTheme(next));
+    };
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return apply();
+    document.startViewTransition(apply);
+  };
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem('theme', theme); } catch {}
@@ -708,7 +723,7 @@ function App() {
       </nav>
       <div class="foot">
         ${quota != null && html`<div class="meta"><b>${quota}</b> search credits left today</div>`}
-        <button class="theme" onClick=${() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+        <button class="theme" onClick=${toggleTheme}
           aria-label=${`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
           ${theme === 'dark' ? '☾ Dark' : '☀ Light'}<span class="sw" /></button>
       </div>
