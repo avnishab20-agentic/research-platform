@@ -47,3 +47,5 @@ Azure resource names appear in the k8s manifests and workflows: the ACR registry
 Rotate it at the source (DeepSeek dashboard, Azure Portal → Access keys, `openssl rand` for SearXNG), update the store it lives in, and restart the pods that read it. Deleting the commit does not help: forks and clones keep it.
 
 The SearXNG key that used to sit in `searxng/settings.yml` is in git history and must be treated as leaked. Generate a new one with the `kubectl patch` above.
+
+<!-- branch protection test: direct push to main -->
