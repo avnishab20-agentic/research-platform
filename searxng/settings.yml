@@ -4,7 +4,9 @@
 use_default_settings: true
 
 server:
-  secret_key: "slV962W42Em0Gz5aWsG2leRY5e8YN"
+  # Real value comes from the SEARXNG_SECRET env var (set in .env, passed by
+  # docker-compose), which overrides this line. Never put the real key here.
+  secret_key: "ultrasecretkey"
   image_proxy: true
 search:
   formats:

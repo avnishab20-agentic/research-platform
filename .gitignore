@@ -11,3 +11,6 @@ graphify-out/
 # Python bytecode from the extractor sidecar
 __pycache__/
 *.pyc
+
+# Local tool settings (contain machine-specific paths)
+.commandcode/

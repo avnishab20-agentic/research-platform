@@ -3,15 +3,15 @@ services:
     image: pgvector/pgvector:pg16
     container_name: research-postgres
     environment:
-      POSTGRES_DB: research
-      POSTGRES_USER: research
-      POSTGRES_PASSWORD: research
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U research"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -59,6 +59,7 @@ services:
       - ./searxng:/etc/searxng
     environment:
       - SEARXNG_BASE_URL=http://localhost:8080
+      - SEARXNG_SECRET=${SEARXNG_SECRET:?set SEARXNG_SECRET in .env}
 
 
   extractor:
