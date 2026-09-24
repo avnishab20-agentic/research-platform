@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -21,6 +22,8 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/auth")
+// Same dev-only origins as RunController: locally the console is served from 8081.
+@CrossOrigin(origins = {"http://localhost:8081", "http://127.0.0.1:8081"})
 public class AuthController {
 
     public record Credentials(String email, String password) {}

@@ -108,7 +108,7 @@ h2.sec{margin:0 0 6px;font-size:26px;font-weight:700;letter-spacing:-.03em}
 .card h3{margin:0 0 3px;font-size:14px;font-weight:650;letter-spacing:-.015em}
 .card .sub{margin:0 0 14px;font-size:12.5px;color:var(--txt-3);line-height:1.55}
 label.f{display:block;font-size:12px;font-weight:500;color:var(--txt-2);margin:0 0 7px}
-input[type=text],textarea,select{width:100%;background:var(--field);color:var(--txt);border:1px solid var(--edge-2);
+input[type=text],input[type=email],input[type=password],textarea,select{width:100%;background:var(--field);color:var(--txt);border:1px solid var(--edge-2);
   border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
 textarea{resize:vertical;min-height:92px;font-family:var(--mono);font-size:12.5px;line-height:1.7}
 input:focus,textarea:focus,select:focus{border-color:var(--cyan);box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent)}
@@ -151,6 +151,17 @@ input[type=range]{width:100%;accent-color:var(--cyan)}
 .err{padding:13px 15px;border-radius:10px;border:1px solid color-mix(in srgb,var(--rose) 40%,transparent);
   background:color-mix(in srgb,var(--rose) 9%,transparent);color:var(--txt);font-size:13px}
 .empty{padding:40px 24px;text-align:center;color:var(--txt-3)}
+.authcard{max-width:420px;margin:0 auto;text-align:left}
+.authcard form{display:flex;flex-direction:column}
+.authcard input{margin-bottom:14px}
+.authcard form .err{margin-bottom:14px}
+.authcard .oauth{display:grid;gap:8px}
+.authcard .oauth .btn,.authcard form .btn{justify-content:center;text-decoration:none}
+.authcard .or{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--txt-3);font-size:12px}
+.authcard .or::before,.authcard .or::after{content:"";flex:1;height:1px;background:var(--edge-2)}
+.authfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap}
+.linkish{appearance:none;background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--cyan);cursor:pointer;text-decoration:underline}
+.whoami{margin-top:10px;font-size:12.5px;color:var(--txt-3)}
 .empty .ico{font-size:28px;opacity:.35;margin-bottom:8px}
 .skel{height:74px;border-radius:var(--r);background:linear-gradient(90deg,var(--panel) 25%,var(--panel-2) 50%,var(--panel) 75%);
   background-size:200% 100%;animation:shim 1.35s ease infinite}

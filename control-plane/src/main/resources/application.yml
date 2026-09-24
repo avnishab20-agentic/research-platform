@@ -81,4 +81,4 @@ jwt:
   user-ttl: 24h
   guest-ttl: 7d
   # Where the browser lands after a Google/GitHub login, with the token in the URL fragment.
-  login-redirect: ${LOGIN_REDIRECT:http://localhost:8083/}
+  login-redirect: ${LOGIN_REDIRECT:http://localhost:8081/}

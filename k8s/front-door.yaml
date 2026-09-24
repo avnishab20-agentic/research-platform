@@ -9,7 +9,10 @@ metadata:
 data:
   Caddyfile: |
     avnish-research.southindia.cloudapp.azure.com {
-      handle /api/v1/runs* {
+      # Runs, plus sign-in: the auth API, the start of a Google/GitHub login (/oauth2/...)
+      # and the provider's redirect back (/login/oauth2/code/...).
+      @control path /api/v1/runs* /api/v1/auth/* /oauth2/* /login/oauth2/*
+      handle @control {
         # Caddy keeps the browser's Host and sets X-Forwarded-Proto, which control-plane
         # needs to see the request as same-origin. flush_interval -1 streams SSE events at once.
         reverse_proxy control-plane:8083 {
