@@ -8,6 +8,7 @@ import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
 import com.comeback.researchplatform.agentservice.retrieval.dto.SearchResult;
+import com.comeback.researchplatform.agentservice.util.UrlHost;
 import com.comeback.researchplatform.common.ResearchFinding;
 import com.comeback.researchplatform.common.ResearchSubtask;
 import com.comeback.researchplatform.common.SourceRef;
@@ -16,14 +17,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * One sub-question, start to finish -- PLAN's 8-step researcher loop:
@@ -53,39 +57,23 @@ public class ResearcherService {
     private final PassageStore passageStore;
     private final ResearcherProperties props;
     private final FixtureIO fixtureIO;
-    private final boolean recordMode;
     private final RunUsageGuard runUsageGuard;
     private final RunActivityLog activity;
 
     public ResearcherService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                               PassageStore passageStore, ResearcherProperties props, FixtureIO fixtureIO,
-                              @Value("${fixtures.record-mode:false}") boolean recordMode,
                               RunUsageGuard runUsageGuard, RunActivityLog activity) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
         this.props = props;
         this.fixtureIO = fixtureIO;
-        this.recordMode = recordMode;
         this.runUsageGuard = runUsageGuard;
         this.activity = activity;
     }
 
     private void say(ResearchSubtask subtask, String message) {
         activity.record(subtask.runId(), subtask.nodeId(), "RESEARCHER", message);
-    }
-
-    // Inline, not a ChatModel decorator -- found live that wrapping ChatModel
-    // as a @Primary bean broke Spring AI's internal OpenAiChatOptions casting
-    // (see docs/progress for the ClassCastException this caused). A plain
-    // post-call side effect at the two spots that already hold a real
-    // ChatResponse has no such risk -- same pattern HttpRetrievalClient's
-    // recording already uses successfully.
-    private void recordChat(String promptText, ChatResponse response) {
-        if (recordMode) {
-            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(promptText),
-                    response.getResult().getOutput().getText());
-        }
     }
 
     public ResearchFinding research(ResearchSubtask subtask) {
@@ -109,12 +97,17 @@ public class ResearcherService {
 
         // Step 4: extract the clean text of the top documents.
         List<ExtractedDocument> documents = extractTopDocuments(results);
-        List<ExtractedDocument> usable = documents.stream()
-                .filter(d -> "OK".equals(d.status()) && d.text() != null && !d.text().isBlank())
-                .toList();
+        List<ExtractedDocument> usable = new ArrayList<>();
+        Set<String> siteNames = new LinkedHashSet<>();
+        for (ExtractedDocument doc : documents) {
+            if (doc.isUsable()) {
+                usable.add(doc);
+                siteNames.add(UrlHost.of(doc.url()));
+            }
+        }
         if (!usable.isEmpty()) {
             say(subtask, "Read " + usable.size() + " of " + documents.size() + " pages: "
-                    + usable.stream().map(d -> host(d.url())).distinct().collect(Collectors.joining(", ")));
+                    + String.join(", ", siteNames));
         }
         if (usable.isEmpty() || overBudget(start)) {
             return partial(subtask, "No extractable sources found for this sub-question.", List.of());
@@ -141,28 +134,31 @@ public class ResearcherService {
         // = downgraded, per PLAN's "downgrade if only tier 3-4 support". Zero
         // regardless of tier when the model declined to answer -- a source
         // being trustworthy says nothing about an answer that wasn't given.
-        Set<String> citedUrls = passages.stream()
-                .map(p -> (String) p.getMetadata().get("sourceUrl"))
-                .collect(Collectors.toSet());
-        List<SourceRef> sources = usable.stream()
-                .filter(d -> citedUrls.contains(d.url()))
-                .map(d -> new SourceRef(d.url(), d.tier()))
-                .distinct()
-                .toList();
+        Set<String> citedUrls = new HashSet<>();
+        for (Document passage : passages) {
+            citedUrls.add((String) passage.getMetadata().get("sourceUrl"));
+        }
+        List<SourceRef> sources = new ArrayList<>();
+        for (ExtractedDocument doc : usable) {
+            SourceRef source = new SourceRef(doc.url(), doc.tier());
+            if (citedUrls.contains(doc.url()) && !sources.contains(source)) {
+                sources.add(source);
+            }
+        }
         double confidence = unanswerable ? 0.0 : confidenceFor(sources);
 
         String finalAnswer;
         if (answer == null) {
             finalAnswer = "Unable to synthesize an answer within budget.";
+            say(subtask, "Couldn't find an answer in what it read");
         } else if (unanswerable) {
             finalAnswer = "The retrieved passages did not contain an answer to this question.";
+            say(subtask, "Couldn't find an answer in what it read");
         } else {
             finalAnswer = answer;
+            say(subtask, "Wrote an answer from the " + passages.size() + " most relevant passages across "
+                    + sources.size() + (sources.size() == 1 ? " source" : " sources"));
         }
-        say(subtask, unanswerable || answer == null
-                ? "Couldn't find an answer in what it read"
-                : "Wrote an answer from the " + passages.size() + " most relevant passages across "
-                        + sources.size() + (sources.size() == 1 ? " source" : " sources"));
 
         return new ResearchFinding(
                 subtask.runId(), subtask.nodeId(), subtask.subQuestion(),
@@ -184,16 +180,20 @@ public class ResearcherService {
                     .call()
                     .chatResponse();
             budget.record(response);
-            recordChat(system + "\n---\n" + user, response);
+            fixtureIO.recordChat(system + "\n---\n" + user, response);
             String text = response.getResult().getOutput().getText();
             if (text == null) {
                 return List.of();
             }
-            return Arrays.stream(text.split("\\R"))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .limit(props.maxSearchQueries())
-                    .toList();
+            // One query per line; skip blank lines and stop at the configured maximum.
+            List<String> queries = new ArrayList<>();
+            for (String line : text.split("\\R")) {
+                String query = line.trim();
+                if (!query.isEmpty() && queries.size() < props.maxSearchQueries()) {
+                    queries.add(query);
+                }
+            }
+            return queries;
         } catch (Exception e) {
             log.warn("Query generation failed for sub-question '{}'", subQuestion, e);
             return List.of();
@@ -205,11 +205,17 @@ public class ResearcherService {
             return List.of();
         }
         try {
-            return retrievalClient.search(queries, props.maxDocumentsToExtract() * 2, null, 4)
-                    .results().stream()
-                    .collect(Collectors.toMap(SearchResult::url, r -> r, (a, b) -> a, LinkedHashMap::new))
-                    .values().stream()
-                    .toList();
+            List<SearchResult> results = retrievalClient.search(queries, props.maxDocumentsToExtract() * 2, null, 4)
+                    .results();
+            // Two queries often find the same page. Keep the first copy of each URL, in order.
+            List<SearchResult> unique = new ArrayList<>();
+            Set<String> seenUrls = new HashSet<>();
+            for (SearchResult result : results) {
+                if (seenUrls.add(result.url())) {
+                    unique.add(result);
+                }
+            }
+            return unique;
         } catch (Exception e) {
             log.warn("Search failed for queries {}", queries, e);
             return List.of();
@@ -220,10 +226,13 @@ public class ResearcherService {
         if (results.isEmpty()) {
             return List.of();
         }
-        List<String> urls = results.stream()
-                .map(SearchResult::url)
-                .limit(props.maxDocumentsToExtract())
-                .toList();
+        List<String> urls = new ArrayList<>();
+        for (SearchResult result : results) {
+            if (urls.size() == props.maxDocumentsToExtract()) {
+                break;
+            }
+            urls.add(result.url());
+        }
         try {
             return retrievalClient.extract(urls).documents();
         } catch (Exception e) {
@@ -236,9 +245,11 @@ public class ResearcherService {
         if (budget.exceeded() || !runUsageGuard.tryLlmCall(runId)) {
             return null;
         }
-        String context = passages.stream()
-                .map(p -> "Source: " + p.getMetadata().get("sourceUrl") + "\n" + p.getText())
-                .collect(Collectors.joining("\n\n---\n\n"));
+        List<String> labelledPassages = new ArrayList<>();
+        for (Document passage : passages) {
+            labelledPassages.add("Source: " + passage.getMetadata().get("sourceUrl") + "\n" + passage.getText());
+        }
+        String context = String.join("\n\n---\n\n", labelledPassages);
         String system = "Answer the research question using only the provided passages. "
                 + "Do not use outside knowledge. If the passages don't answer the "
                 + "question, reply with exactly this and nothing else: " + UNANSWERABLE;
@@ -250,7 +261,7 @@ public class ResearcherService {
                     .call()
                     .chatResponse();
             budget.record(response);
-            recordChat(system + "\n---\n" + user, response);
+            fixtureIO.recordChat(system + "\n---\n" + user, response);
             return response.getResult().getOutput().getText();
         } catch (Exception e) {
             log.warn("Answer synthesis failed for sub-question '{}'", subQuestion, e);
@@ -266,7 +277,11 @@ public class ResearcherService {
         if (sources.isEmpty()) {
             return 0.0;
         }
-        int bestTier = sources.stream().mapToInt(SourceRef::tier).min().orElse(4);
+        // Lower tier number = more trusted source, so the best tier is the smallest one.
+        int bestTier = 4;
+        for (SourceRef source : sources) {
+            bestTier = Math.min(bestTier, source.tier());
+        }
         return switch (bestTier) {
             case 1 -> 0.95;
             case 2 -> 0.85;
@@ -286,15 +301,6 @@ public class ResearcherService {
         say(subtask, "Stopped early: " + reason);
         return new ResearchFinding(subtask.runId(), subtask.nodeId(), subtask.subQuestion(),
                 reason, sources, 0.0, STATUS_PARTIAL);
-    }
-
-    static String host(String url) {
-        try {
-            String h = java.net.URI.create(url).getHost();
-            return h == null ? url : h.replaceFirst("^www\\.", "");
-        } catch (IllegalArgumentException e) {
-            return url;
-        }
     }
 
     /** Tracks cumulative token usage across a subtask's LLM calls. DeepSeek's

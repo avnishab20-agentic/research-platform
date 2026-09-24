@@ -2,6 +2,7 @@ package com.comeback.researchplatform.agentservice.fixtures;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -34,6 +35,7 @@ public class FixtureIO {
 
     private final ObjectMapper objectMapper;
     private final String sourceDir;
+    private final boolean recordMode;
 
     public FixtureIO(ObjectMapper objectMapper,
                       // Relative to the process's actual working directory, which for
@@ -42,9 +44,31 @@ public class FixtureIO {
                       // wrong "agent-service/..." prefix here created a wrongly
                       // double-nested agent-service/agent-service/src/... tree instead
                       // of writing to the real source folder.
-                      @Value("${fixtures.record-dir:src/main/resources/fixtures/}") String sourceDir) {
+                      @Value("${fixtures.record-dir:src/main/resources/fixtures/}") String sourceDir,
+                      @Value("${fixtures.record-mode:false}") boolean recordMode) {
         this.objectMapper = objectMapper;
         this.sourceDir = sourceDir;
+        this.recordMode = recordMode;
+    }
+
+    /** True when {@code fixtures.record-mode} is on: live responses get saved as fixtures. */
+    public boolean isRecordMode() {
+        return recordMode;
+    }
+
+    /** Saves one live chat reply so fixture mode can replay it later. Does nothing
+     *  unless record mode is on. Replay itself is handled by FixtureChatModel.
+     *  <p>
+     *  {@code promptText} must be the system and user text joined by
+     *  {@code "\n---\n"}, the same way FixtureChatModel builds its lookup key.
+     *  <p>
+     *  Called by hand after each chat call rather than done by wrapping the
+     *  ChatModel bean: a @Primary ChatModel decorator was tried and broke
+     *  Spring AI's internal OpenAiChatOptions casting (ClassCastException). */
+    public void recordChat(String promptText, ChatResponse response) {
+        if (recordMode) {
+            record("chat-responses.json", keyFor(promptText), response.getResult().getOutput().getText());
+        }
     }
 
     /** Stable, fixed-length key for an arbitrary piece of request text (a

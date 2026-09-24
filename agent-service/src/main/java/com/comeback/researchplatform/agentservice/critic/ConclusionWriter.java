@@ -8,18 +8,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * The last step of a run: turn the graded claims into an answer a person can
@@ -48,18 +47,15 @@ public class ConclusionWriter {
     private final RunUsageGuard runUsageGuard;
     private final RunActivityLog activity;
     private final FixtureIO fixtureIO;
-    private final boolean recordMode;
 
     public ConclusionWriter(ChatClient.Builder chatClientBuilder, JdbcTemplate jdbc, ObjectMapper objectMapper,
-                            RunUsageGuard runUsageGuard, RunActivityLog activity, FixtureIO fixtureIO,
-                            @Value("${fixtures.record-mode:false}") boolean recordMode) {
+                            RunUsageGuard runUsageGuard, RunActivityLog activity, FixtureIO fixtureIO) {
         this.chatClient = chatClientBuilder.build();
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.runUsageGuard = runUsageGuard;
         this.activity = activity;
         this.fixtureIO = fixtureIO;
-        this.recordMode = recordMode;
     }
 
     /** Never throws: a missing conclusion must not stop the run reaching its final status. */
@@ -102,10 +98,7 @@ public class ConclusionWriter {
                 .user(user)
                 .call()
                 .responseEntity(Draft.class);
-        if (recordMode) {
-            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(system + "\n---\n" + user),
-                    result.response().getResult().getOutput().getText());
-        }
+        fixtureIO.recordChat(system + "\n---\n" + user, result.response());
         return result.entity();
     }
 
@@ -116,10 +109,12 @@ public class ConclusionWriter {
             return null;
         }
         List<Takeaway> takeaways = new ArrayList<>();
-        for (DraftTakeaway t : Objects.requireNonNullElse(draft.takeaways(), List.<DraftTakeaway>of())) {
-            List<UUID> ids = ids(t.cites(), passed);
-            if (t.text() != null && !t.text().isBlank() && !ids.isEmpty()) {
-                takeaways.add(new Takeaway(clean(t.text()), ids));
+        if (draft.takeaways() != null) {
+            for (DraftTakeaway t : draft.takeaways()) {
+                List<UUID> ids = ids(t.cites(), passed);
+                if (t.text() != null && !t.text().isBlank() && !ids.isEmpty()) {
+                    takeaways.add(new Takeaway(clean(t.text()), ids));
+                }
             }
         }
         List<UUID> answerIds = ids(draft.answerCites(), passed);
@@ -131,19 +126,24 @@ public class ConclusionWriter {
 
     // The model sometimes writes "[2,3,4]" into the prose as well as the cites field;
     // the page renders citations itself, so inline ones would show twice.
-    private static final java.util.regex.Pattern INLINE_CITES = java.util.regex.Pattern.compile("\\s*\\[[\\d,\\s–-]+]");
+    private static final Pattern INLINE_CITES = Pattern.compile("\\s*\\[[\\d,\\s–-]+]");
 
     static String clean(String text) {
         return INLINE_CITES.matcher(text).replaceAll("").trim();
     }
 
+    /** Turns citation numbers (1-based) into claim ids. Numbers that don't point at a
+     *  passed claim are dropped, and a claim cited twice is kept once. */
     private static List<UUID> ids(List<Integer> cites, List<ClaimRow> passed) {
-        Map<UUID, Boolean> out = new LinkedHashMap<>();
-        for (Integer n : Objects.requireNonNullElse(cites, List.<Integer>of())) {
+        if (cites == null) {
+            return List.of();
+        }
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (Integer n : cites) {
             if (n != null && n >= 1 && n <= passed.size()) {
-                out.put(passed.get(n - 1).id(), true);
+                ids.add(passed.get(n - 1).id());
             }
         }
-        return List.copyOf(out.keySet());
+        return new ArrayList<>(ids);
     }
 }

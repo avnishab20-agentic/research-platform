@@ -10,8 +10,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Replays a recorded response for the exact prompt text -- PLAN's fixture
@@ -38,8 +38,10 @@ public class FixtureChatModel implements ChatModel {
     }
 
     static String promptText(Prompt prompt) {
-        return prompt.getInstructions().stream()
-                .map(Message::getText)
-                .collect(Collectors.joining("\n---\n"));
+        List<String> texts = new ArrayList<>();
+        for (Message message : prompt.getInstructions()) {
+            texts.add(message.getText());
+        }
+        return String.join("\n---\n", texts);
     }
 }

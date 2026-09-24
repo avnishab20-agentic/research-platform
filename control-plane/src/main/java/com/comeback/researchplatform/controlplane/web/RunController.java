@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -21,8 +22,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The one plain SSE page's backend -- CLAUDE.md: "Rich UI... one plain SSE
@@ -81,7 +80,7 @@ public class RunController {
                     (rs, rowNum) -> new RunStatusResponse(
                             UUID.fromString(rs.getString("id")), rs.getString("question"), rs.getString("status")),
                     id);
-        } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+        } catch (EmptyResultDataAccessException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No run with id " + id);
         }
     }
@@ -101,61 +100,99 @@ public class RunController {
         // transport before the guardrail itself would have ended it.
         SseEmitter emitter = new SseEmitter(15 * 60 * 1000L);
         ScheduledExecutorService poller = Executors.newSingleThreadScheduledExecutor();
-        AtomicReference<String> lastPayload = new AtomicReference<>();
-        AtomicLong lastActivityId = new AtomicLong(0);
+        ScheduledFuture<?> future = poller.scheduleAtFixedRate(
+                new ProgressPoll(id, emitter), 0, 1, TimeUnit.SECONDS);
 
-        ScheduledFuture<?> future = poller.scheduleAtFixedRate(() -> {
-            // The poller runs on its own dedicated thread, not the request
-            // thread that called events() -- MDC is thread-local, so it has to
-            // be set here too, not just at the top of events() itself.
-            MDC.put("runId", id.toString());
+        // All three completion paths (client disconnect, 15-min timeout, a
+        // poll throwing) must stop the poller -- otherwise every finished
+        // stream leaks one live scheduled thread forever.
+        emitter.onCompletion(() -> stopPolling(future, poller));
+        emitter.onTimeout(() -> {
+            stopPolling(future, poller);
+            emitter.complete();
+        });
+        emitter.onError(e -> stopPolling(future, poller));
+
+        return emitter;
+    }
+
+    private static void stopPolling(ScheduledFuture<?> future, ScheduledExecutorService poller) {
+        future.cancel(true);
+        poller.shutdown();
+    }
+
+    /**
+     * One tick of the SSE stream, run once a second on the poller thread. It
+     * remembers what it already sent (the last activity id and the last
+     * progress line) so each tick only sends what is new.
+     * <p>
+     * Only ever touched by the one poller thread, so plain fields are enough.
+     */
+    private class ProgressPoll implements Runnable {
+
+        private final UUID runId;
+        private final SseEmitter emitter;
+        private long lastActivityId = 0;
+        private String lastProgress = null;
+
+        ProgressPoll(UUID runId, SseEmitter emitter) {
+            this.runId = runId;
+            this.emitter = emitter;
+        }
+
+        @Override
+        public void run() {
+            // This runs on the poller thread, not the request thread that called
+            // events() -- MDC is per-thread, so it has to be set here as well.
+            MDC.put("runId", runId.toString());
             try {
-                // Activity before progress, so the Critic's closing "Done" line
-                // reaches the browser before a terminal status closes the stream.
-                for (ActivityView activity : activitySince(id, lastActivityId.get())) {
-                    emitter.send(SseEmitter.event().name("activity").data(activity));
-                    lastActivityId.set(activity.id());
-                }
-                RunProgressEvent progress = currentProgress(id);
-                String payload = progress.status() + ":" + progress.completed() + "/" + progress.expected();
-                if (!payload.equals(lastPayload.get())) {
-                    lastPayload.set(payload);
-                    emitter.send(SseEmitter.event().name("progress").data(progress));
-                }
+                sendNewActivity();
+                RunProgressEvent progress = sendProgressIfChanged();
                 if (TERMINAL_STATUSES.contains(progress.status())) {
                     emitter.complete();
                 }
             } catch (EmptyResultDataAccessException e) {
                 emitter.completeWithError(e);
             } catch (Exception e) {
-                log.warn("SSE poll failed for run {}", id, e);
+                log.warn("SSE poll failed for run {}", runId, e);
                 emitter.completeWithError(e);
             } finally {
                 MDC.remove("runId");
             }
-        }, 0, 1, TimeUnit.SECONDS);
+        }
 
-        // All three completion paths (client disconnect, 15-min timeout, a
-        // poll throwing) must stop the poller -- otherwise every finished
-        // stream leaks one live scheduled thread forever.
-        Runnable stopPolling = () -> { future.cancel(true); poller.shutdown(); };
-        emitter.onCompletion(stopPolling);
-        emitter.onTimeout(() -> { stopPolling.run(); emitter.complete(); });
-        emitter.onError(e -> stopPolling.run());
+        // Sent before progress, so the Critic's closing "Done" line reaches the
+        // browser before a terminal status closes the stream.
+        private void sendNewActivity() throws IOException {
+            for (ActivityView activity : activitySince(runId, lastActivityId)) {
+                emitter.send(SseEmitter.event().name("activity").data(activity));
+                lastActivityId = activity.id();
+            }
+        }
 
-        return emitter;
+        private RunProgressEvent sendProgressIfChanged() throws IOException {
+            RunProgressEvent progress = currentProgress(runId);
+            String summary = progress.status() + ":" + progress.completed() + "/" + progress.expected();
+            if (!summary.equals(lastProgress)) {
+                lastProgress = summary;
+                emitter.send(SseEmitter.event().name("progress").data(progress));
+            }
+            return progress;
+        }
     }
 
     private RunProgressEvent currentProgress(UUID id) {
         String status = jdbc.queryForObject("SELECT status FROM runs WHERE id = ?", String.class, id);
         // A run with zero sub-questions (planner failure) has no dag_levels
         // row at all -- treat that as 0/0 rather than erroring the stream.
-        Map<String, Object> level = jdbc.query(
-                "SELECT completed, expected FROM dag_levels WHERE run_id = ? AND level = ?",
-                rs -> rs.next() ? Map.of("completed", rs.getInt("completed"), "expected", rs.getInt("expected")) : Map.of(),
-                id, LEVEL);
-        int completed = level.isEmpty() ? 0 : (int) level.get("completed");
-        int expected = level.isEmpty() ? 0 : (int) level.get("expected");
+        List<Map<String, Object>> levels = jdbc.queryForList(
+                "SELECT completed, expected FROM dag_levels WHERE run_id = ? AND level = ?", id, LEVEL);
+        int completed = 0;
+        int expected = 0;
+        if (!levels.isEmpty()) {
+            completed = ((Number) levels.get(0).get("completed")).intValue();
+            expected = ((Number) levels.get(0).get("expected")).intValue();
+        }
         List<WorkerView> workers = jdbc.query(
                 "SELECT id, sub_question, status FROM dag_nodes WHERE run_id = ? AND level = ? ORDER BY created_at",
                 (rs, rowNum) -> new WorkerView((UUID) rs.getObject("id"), rs.getString("sub_question"),

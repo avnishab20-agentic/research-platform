@@ -17,9 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -115,7 +115,7 @@ public class PlannerService {
         // java.sql.Timestamp, not Instant -- the Postgres driver can't infer
         // a SQL type for a raw Instant parameter (see FanInService for the
         // same fix, found by actually running this).
-        java.sql.Timestamp deadline = java.sql.Timestamp.from(Instant.now().plus(props.levelDeadline()));
+        Timestamp deadline = Timestamp.from(Instant.now().plus(props.levelDeadline()));
         jdbc.update("INSERT INTO dag_levels (run_id, level, expected, completed, deadline) "
                 + "VALUES (?, 0, ?, 0, ?)", runId, nodeIds.size(), deadline);
 
@@ -158,11 +158,14 @@ public class PlannerService {
             if (text == null) {
                 return List.of();
             }
-            List<String> subQuestions = Arrays.stream(text.split("\\R"))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .limit(props.maxFanOut())
-                    .toList();
+            // One sub-question per line; skip blank lines and stop at the fan-out cap.
+            List<String> subQuestions = new ArrayList<>();
+            for (String line : text.split("\\R")) {
+                String subQuestion = line.trim();
+                if (!subQuestion.isEmpty() && subQuestions.size() < props.maxFanOut()) {
+                    subQuestions.add(subQuestion);
+                }
+            }
             // A live run doubles as the way fixture data gets captured -- same pattern
             // ResearcherService/HttpRetrievalClient use, keyed on the question text so a
             // fixture-mode replay of the same question hits this exact recorded plan.

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +86,7 @@ public class FanInService {
         // against real Postgres, not by reading the code).
         List<Map<String, Object>> expired = jdbc.queryForList(
                 "SELECT run_id, level FROM dag_levels WHERE completed < expected AND deadline < ?",
-                java.sql.Timestamp.from(Instant.now()));
+                Timestamp.from(Instant.now()));
         for (Map<String, Object> row : expired) {
             UUID runId = (UUID) row.get("run_id");
             int level = ((Number) row.get("level")).intValue();

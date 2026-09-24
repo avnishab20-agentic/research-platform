@@ -42,11 +42,11 @@ public class PassageStore {
         if (text == null || text.isBlank()) {
             return;
         }
-        List<Document> documents = chunk(text).stream()
-                .map(passage -> new Document(passage, Map.of(
-                        META_RUN_ID, runId.toString(),
-                        META_SOURCE_URL, sourceUrl)))
-                .toList();
+        List<Document> documents = new ArrayList<>();
+        for (String passage : chunk(text)) {
+            Map<String, Object> metadata = Map.of(META_RUN_ID, runId.toString(), META_SOURCE_URL, sourceUrl);
+            documents.add(new Document(passage, metadata));
+        }
         if (!documents.isEmpty()) {
             vectorStore.add(documents);
         }

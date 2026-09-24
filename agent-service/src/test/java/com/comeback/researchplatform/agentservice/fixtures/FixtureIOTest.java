@@ -26,27 +26,27 @@ class FixtureIOTest {
 
     @Test
     void readFindsAValueCommittedOnTheTestClasspath() {
-        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/");
+        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/", false);
         assertThat(fixtureIO.read("sample.json", "testkey123", String.class)).isEqualTo("hello from a fixture");
     }
 
     @Test
     void readThrowsALoudMissRatherThanReturningNull() {
-        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/");
+        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/", false);
         assertThatThrownBy(() -> fixtureIO.read("sample.json", "no-such-key", String.class))
                 .isInstanceOf(FixtureMissException.class);
     }
 
     @Test
     void readOfAMissingFileThrowsRatherThanReturningNull() {
-        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/");
+        FixtureIO fixtureIO = new FixtureIO(objectMapper, "unused/", false);
         assertThatThrownBy(() -> fixtureIO.read("does-not-exist.json", "any-key", String.class))
                 .isInstanceOf(FixtureMissException.class);
     }
 
     @Test
     void recordWritesValidJsonToTheConfiguredDirectory(@TempDir Path tempDir) throws Exception {
-        FixtureIO fixtureIO = new FixtureIO(objectMapper, tempDir + "/");
+        FixtureIO fixtureIO = new FixtureIO(objectMapper, tempDir + "/", true);
         fixtureIO.record("recorded.json", "keyA", "valueA");
         fixtureIO.record("recorded.json", "keyB", "valueB");
 
