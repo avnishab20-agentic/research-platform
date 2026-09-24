@@ -9,10 +9,11 @@ No secret values are stored in this repo. Each one lives in a store that only th
 | `DEEPSEEK_API_KEY` | agent-service, control-plane | `.env` or shell export | not needed | `app-secrets` Secret |
 | `TAVILY_API_KEY` | retrieval-service | `.env` or shell export | not needed | `secret-ref` Secret |
 | `SEARXNG_SECRET` | searxng | `.env` (compose has a local-only fallback) | not needed | `app-secrets` Secret, key `SEARXNG_SECRET` |
-| Postgres password | control-plane, agent-service | `research` (local container, localhost only) | not needed | `app-secrets` Secret |
+| Postgres password (`SPRING_DATASOURCE_PASSWORD`) | control-plane, agent-service | not needed: falls back to `research`, the local container's password | not needed | `app-secrets` Secret |
 | Redis access key | retrieval-service | none (local Redis has no password) | not needed | `secret-ref` Secret |
 | `EVENTHUBS_CONNECTION_STRING` | agent-service, control-plane | not needed (Redpanda) | not needed | `app-secrets` Secret |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | deploy workflows | not needed | repo Secrets | not needed |
+| `SONAR_TOKEN` | `backend-pr-validation` (SonarQube Cloud scan) | not needed | repo Secret (the scan skips itself without it) | not needed |
 
 The Azure login in `.github/workflows/_build-deploy.yml` uses OIDC: GitHub hands Azure a short-lived signed token and Azure checks it against a federated credential. There is no Azure password or client secret anywhere, including in GitHub.
 

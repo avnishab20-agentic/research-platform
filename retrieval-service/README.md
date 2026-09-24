@@ -1,55 +1,77 @@
 # retrieval-service
 
-**Port:** 8081
+**Port 8081.** The only part of the system allowed to touch the web. It
+searches, downloads pages, turns them into clean text, caches everything, and
+makes sure we stay within our search budget and don't overload any website.
+It also serves the web page you use (`src/main/resources/static/`).
 
-## What this is
-The only service in this system allowed to search the web or fetch a page.
-Everything about search — running the query, fetching the page, extracting
-clean text from the HTML, caching the result, and making sure we don't hammer
-any one site or blow through a search-API quota — lives here. `CLAUDE.md` calls
-this "the quota boundary": no other service is allowed to call a search API
-directly.
+## Endpoints
 
-## How it will work (planned endpoints, per `docs/PLAN.md`)
+| Endpoint | Takes | Returns |
+|---|---|---|
+| `POST /api/v1/search` | `queries[]`, `maxResults`, `minTier`, `freshness` | results (url, title, snippet, trust tier), `creditsSpent`, `cacheHits` |
+| `POST /api/v1/extract` | `urls[]` | one document per URL: clean text, tier, status |
+| `GET /api/v1/quota` | — | searches left today |
+
+When the daily search quota is used up (and guardrails are in `ENFORCE` mode),
+`/search` returns **429 Too Many Requests**.
+
+## How it works
+
+**Search** (`search/SearchService`)
+1. The query is normalised (trimmed, lower-cased, spaces collapsed) and turned
+   into a cache key.
+2. If it's cached in Redis, the cached result is returned for free.
+3. Otherwise, one request takes a short Redis lock and does the real search
+   through SearXNG (or Tavily, if `TAVILY_API_KEY` is set). That costs one
+   credit, and the result is cached for 24 hours. Identical requests arriving
+   at the same moment wait for that result instead of searching again.
+4. Each result gets a **trust tier** from its website (`tier/SourceTierResolver`,
+   configured under `source-tiers:`): 1 official, 2 established news,
+   3 unknown, 4 low-trust.
+
+**Extract** (`extract/ExtractService`): each URL is handled in parallel:
+1. Check the cache (pages are cached for 7 days).
+2. Wait for this website's rate limit (`ratelimit/DomainRateLimiter`, a token
+   bucket stored in Redis and run as a Lua script, so every copy of the
+   service shares the same limit).
+3. Download the HTML (`extract/PageFetcher`): only `http`/`https`, never an
+   address inside a private network, at most 2 MB.
+4. Send it to the Python **extractor** sidecar, which strips menus and ads. At
+   most 4 extractions run at once.
+
+A failed URL never breaks the whole batch. It comes back with a status:
+`OK`, `PAYWALLED`, `UNREACHABLE`, `TOO_LARGE`, `RATE_LIMITED`,
+`BLOCKED_SCHEME` or `BLOCKED_PRIVATE_NETWORK`.
+
+**URL normalisation** (`url/UrlNormalizer`): different spellings of the same
+page share one cache entry. For example,
+`https://www.TheHindu.com/news/?utm_source=x#top` and
+`https://thehindu.com/news` are treated as the same page.
+
+## Configuration (`application.yml`)
+
+| Block | Controls |
+|---|---|
+| `guardrails.retrieval` | daily search quota, private-network blocking, allowed URL schemes |
+| `rate-limit` | per-website token bucket: burst size, refill rate, wait attempts |
+| `extractor` | the sidecar's address, page size cap, page cache time, timeouts, how many extractions at once |
+| `source-tiers` | which domains are tier 1, tier 2, and tier 4 |
+| `searxng`, `tavily` | where the search engines are |
+
+## Why a separate service
+
+If every agent could search on its own, nobody could answer "how much have we
+spent today?" or "why did this website block us?" without checking several
+places. With one service in charge, the budget, the cache and the politeness
+rules are all in one place.
+
+This service never decides *what* to search for or what the results mean.
+That's `agent-service`'s job.
+
+## Run and test
+
+```bash
+mvn -pl retrieval-service -am test          # unit tests (no Redis or network needed)
+mvn -pl retrieval-service spring-boot:run   # needs Redis, SearXNG, extractor (docker compose up -d)
 ```
-POST /api/v1/search    queries[] → results[] + creditsSpent + cacheHits
-POST /api/v1/extract   urls[]    → documents[] (text, tier, status)
-GET  /api/v1/quota     credits remaining
-```
-- **Search** goes to SearXNG (a self-hosted metasearch engine — it queries
-  several real search engines and merges the results, so we don't need our own
-  API key for each one).
-- **Extract** hands raw HTML to a small Python sidecar (`trafilatura`) that
-  strips ads/navigation/boilerplate and returns clean article text.
-- Both results are **cached in Redis** (cache-aside: check cache, miss, fetch,
-  store with a TTL) so the same query or URL isn't paid for twice.
-- A **Redis-backed token bucket** rate-limits outbound requests per domain, so
-  we don't get IP-banned by a site we're scraping politely.
-
-## Why it's designed this way
-If five different agents could each call the search API whenever they wanted,
-nobody could answer "how much search budget have we used this hour?" or
-"why did site X block us?" without checking five places. Centralizing it in
-one service means there's exactly one place that enforces the budget and the
-politeness rules — and one place to look when something about search behaves
-oddly.
-
-Caching lives here too (not in each agent) for the same reason: two different
-researcher agents asking the same question shouldn't cost twice.
-
-## Why only this — the boundary
-This service does **not** decide what to search for, and it does **not**
-reason about the results — that's `agent-service`'s job. `retrieval-service`
-is a dumb, fast, cacheable I/O layer: give it a query or a URL, it gives you
-results or text back. Keeping "what to ask" and "how to fetch it" separate
-means the fetching logic (caching, rate limits, retries) never has to know
-anything about the AI side, and can be tested and reasoned about on its own.
-
-## Status
-Skeleton only — the Spring Boot app boots and `/actuator/health` responds, but
-none of the endpoints above are implemented yet. That's Session 2 onward per
-`docs/PLAN.md`.
-
-> Package is `com.comeback.researchplatform.retrievalservice` — matches
-> `agent-service` and `control-plane`. (Renamed from the Initializr wizard's
-> `com.comback` typo in Session 3, before real endpoint code landed in it.)

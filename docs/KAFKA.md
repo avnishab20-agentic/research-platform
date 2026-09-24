@@ -52,12 +52,12 @@ You submit a question
         |
         v
   [control-plane: PlannerService]
-   "breaks your question into 6-8 smaller sub-questions"
+   "breaks your question into 5 smaller sub-questions"
         |
         |  drops one letter per sub-question into...
         v
   MAILBOX: research.subtasks   (12 slots/partitions — the widest mailbox,
-                                 because up to 8 letters can land here at once)
+                                 because several runs' letters can land at once)
         |
         |  picked up by up to 6 workers at the same time...
         v
@@ -71,16 +71,16 @@ You submit a question
         |  picked up one at a time by...
         v
   [control-plane: FindingListener -> FanInService]
-   "keeps a tally in Postgres: how many of the 8 sub-questions are done?"
+   "keeps a tally in Postgres: how many of the 5 sub-questions are done?"
         |
-        |  once ALL 8 are done, drops ONE letter (not eight) into...
+        |  once ALL 5 are done, drops ONE letter (not five) into...
         v
   MAILBOX: run.ready   (3 slots)
         |
         |  picked up by...
         v
   [agent-service: RunReadyListener -> WriterService]
-   "turns all 8 answers into a list of individual, fact-checkable claims"
+   "turns all 5 answers into a list of individual, fact-checkable claims"
         |
         |  drops one letter into...
         v
@@ -96,14 +96,12 @@ You submit a question
 ```
 
 Notice this never uses Kafka to talk back to your browser. The browser
-finds out what's happening by asking Postgres directly, over and over,
-every second (that's the SSE — Server-Sent Events — page you saw). Kafka
-is purely the "backstage" communication between services. There's actually
-a 5th mailbox, `agent.events`, that was built for exactly this purpose
-(pushing live progress updates) — but it's currently unused. The SSE page
-ended up just asking Postgres directly instead, which turned out to be
-simpler, so `agent.events` is declared and ready but nothing writes to it
-yet.
+keeps one SSE (Server-Sent Events) connection open to control-plane, and
+control-plane checks Postgres once a second and sends anything new. Kafka
+is purely the "backstage" communication between services. There's a 5th
+mailbox, `agent.events`, that was built for pushing live progress, but
+it's unused: reading Postgres turned out simpler, so `agent.events` is
+created on startup but nothing writes to it.
 
 ---
 
@@ -116,7 +114,7 @@ and is meant to stay as dependency-free as possible.
 
 | Topic name | Who writes to it | Who reads from it | Slots (partitions) | Why that many slots |
 |---|---|---|---|---|
-| `research.subtasks` | control-plane's planner | agent-service (RESEARCHER) | 12 | Widest one — up to 8 sub-questions from one run can land here simultaneously, and you want room for several runs at once too |
+| `research.subtasks` | control-plane's planner | agent-service (RESEARCHER) | 12 | Widest one — 5 sub-questions per run land here at once, and you want room for several runs at the same time |
 | `research.findings` | agent-service (RESEARCHER) | control-plane's fan-in | 6 | One letter per sub-question's *answer* — same traffic shape as above, just the return trip |
 | `run.ready` | control-plane's fan-in | agent-service (WRITER) | 3 | Only ONE letter per whole run (not per sub-question) — much less traffic |
 | `claims.ready` | agent-service (WRITER) | agent-service (CRITIC) | 3 | Same — one letter per run |
@@ -128,11 +126,15 @@ called `research.subtasks` with 12 slots." That's
 `control-plane/.../config/KafkaTopicConfig.java`. It declares each topic
 as a small Spring "bean" (a `NewTopic` object), and Spring Kafka creates
 them automatically the moment `control-plane` starts up. This matters
-because the Kafka broker used here (Redpanda, a Kafka-compatible engine)
+because the local Kafka broker (Redpanda, a Kafka-compatible engine)
 has **no persistent storage** in this project's Docker setup — every time
 you run `docker compose up` fresh, the broker starts empty, mailboxes and
 all. Without `KafkaTopicConfig`, you'd have to manually recreate every
 topic by hand after every restart.
+
+On Azure the broker is **Event Hubs**, which speaks the Kafka protocol but
+doesn't reliably auto-create topics, so there the 5 topics are created by
+hand once (see [DEPLOYMENT.md](DEPLOYMENT.md)).
 
 ---
 
@@ -144,7 +146,7 @@ This is the part to read side-by-side with the actual files.
 
 This is where a run begins. `submit(question)` does three things:
 1. Writes a row to the `runs` table in Postgres (status `RUNNING`).
-2. Calls DeepSeek (the LLM) to break your question into 6-8 sub-questions.
+2. Calls DeepSeek (the LLM) to break your question into 5 sub-questions.
 3. **For each sub-question**, builds a `ResearchSubtask` (a small record —
    just `runId`, `nodeId`, `level`, `subQuestion`) and sends it:
    ```java
@@ -154,7 +156,7 @@ This is where a run begins. `submit(question)` does three things:
 Notice the second argument — `nodeIds.get(i).toString()`. That's the
 **message key**, and it matters a lot (explained in Part 5). Short
 version: using a different key (`nodeId`) for every sub-question is what
-spreads all 8 of them across different partitions, so they can actually
+spreads all 5 of them across different partitions, so they can actually
 run *in parallel* instead of all queuing up behind each other.
 
 ### Step 2 — `agent-service/researcher/ResearchSubtaskListener.java`
@@ -193,7 +195,7 @@ public void onFinding(ResearchFinding finding) {
 ```
 
 `FanInService.recordFinding(...)` is where the actually clever bit lives —
-**how do we know when all 8 sub-questions are done, when up to 6 of them
+**how do we know when all 5 sub-questions are done, when several of them
 might finish at the exact same instant?**
 
 The answer is one line of SQL:
@@ -204,10 +206,10 @@ RETURNING completed, expected
 ```
 Postgres guarantees that if two of these `UPDATE`s hit the same row at the
 same instant, they get processed one after the other, never at the same
-time (this is called row-level locking). So even if 6 findings land in
+time (this is called row-level locking). So even if 5 findings land in
 the same millisecond, each one gets back a genuinely different, correctly
-incremented number. **Exactly one** of those 6 will see
-`completed == expected` (e.g. `8 == 8`) — and only that one goes on to
+incremented number. **Exactly one** of those 5 will see
+`completed == expected` (e.g. `5 == 5`) — and only that one goes on to
 publish to `run.ready`. Everyone else just quietly does nothing more.
 
 Why not just keep this count in a Java variable in memory? Because if
@@ -220,7 +222,7 @@ AtomicInteger... it must be in Postgres."*
 ### Step 4 — `agent-service/writer/RunReadyListener.java` + `WriterService.java`
 
 Same shape again: a tiny listener hands off to a real worker class.
-`WriterService.write(runId)` reads all 8 findings back out of Postgres,
+`WriterService.write(runId)` reads all the findings back out of Postgres,
 asks DeepSeek to turn them into individual, checkable claims (not one big
 paragraph of prose), saves those claims to Postgres, and sends one
 `ClaimsReady` letter to `claims.ready`.
@@ -230,9 +232,10 @@ paragraph of prose), saves those claims to Postgres, and sends one
 Last stop. `CriticService.verify(runId)` re-fetches every single source
 URL that got cited, and asks DeepSeek to grade each claim against the
 freshly-fetched text: SUPPORTED, PARTIAL, UNSUPPORTED, or CONTRADICTED.
-Once every claim has a verdict, it flips the run's status in Postgres to
-`VERIFIED` (or `UNVERIFIED` if too many claims failed). Nothing gets
-published to Kafka after this — the trip is over.
+Failed claims get one more try: `ClaimCorrector` searches again and either
+rewrites the claim to match a real source or removes it. Then the run's
+status in Postgres flips to `VERIFIED` (or `UNVERIFIED` if too many claims
+failed). Nothing gets published to Kafka after this — the trip is over.
 
 ---
 
@@ -245,8 +248,9 @@ because it's textbook best practice — that history is worth knowing,
 because it's the "why," not just the "what."
 
 ### `bootstrap-servers: localhost:9092`
-Just the address of the Kafka broker (Redpanda) to connect to. Nothing
-fancy — this is the phone number to call to reach the mailroom.
+Just the address of the Kafka broker to connect to: Redpanda on your laptop.
+On Azure it's replaced by the Event Hubs address (plus a login) from
+`k8s/platform-config.yaml`. This is the phone number to call to reach the mailroom.
 
 ### `group-id` / `groupId` (a different one per listener!)
 This is the single most important concept to actually understand.

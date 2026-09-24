@@ -1,38 +1,36 @@
 # common
 
-## What this is
-A shared library — plain Java `record`s that describe the shape of data moving
-between the three services (Kafka messages, HTTP payloads, agent contracts like
-`Claim` or `ResearchFinding`). It is **not** a service: no `main` method, nothing
-here ever runs on its own.
+Shared data shapes: plain Java `record`s that the three services send to each
+other. It's a library, not an app: no `main` method, nothing here runs on its
+own.
 
-## How it works
-It's a plain Maven `jar` module. The other three services (`retrieval-service`,
-`agent-service`, `control-plane`) declare it as a dependency and get these types
-on their classpath at compile time. It deliberately does **not** have the
-`spring-boot-maven-plugin` — that plugin repackages a module into an executable
-"fat jar" meant to be run, which would make no sense for a module that's only
-ever imported, never launched.
+## What's in it
 
-## Why it exists
-Three services need to agree on exactly what a message looks like — e.g. what
-fields a `Claim` has, what type `sourceId` is. If each service defined its own
-version of that type, a typo or type mismatch (say, one service uses `String`
-for an ID and another uses `UUID`) would only be caught when a real message
-fails to deserialize in production — usually confusing, usually at 2am.
+| Type | What it is |
+|---|---|
+| `ResearchSubtask` | one sub-question to research (Kafka: planner → researcher) |
+| `ResearchFinding` | a researcher's answer with its sources and confidence (Kafka: researcher → fan-in) |
+| `RunReady`, `ClaimsReady` | "this run is ready for the next step" signals (Kafka) |
+| `Claim`, `ClaimKind`, `SourceRef`, `Section`, `Report` | the parts of a written report |
+| `Verdict`, `ClaimVerdict` | the fact-checker's grade for one claim |
+| `AgentEvent` | a progress event (defined, not used yet) |
+| `KafkaTopics` | the topic names, as constants |
+| `GuardrailProperties`, `GuardrailMode` | the Java record that the `guardrails:` config block is loaded into |
 
-By putting the type in one shared module that every service imports, the same
-kind of mistake becomes a **compile error** on `mvn install`, days earlier and
-with a stack trace pointing at the exact line.
+## Why a shared module
 
-## Why only this — the boundary
-`common` holds shared **data shapes only** — no business logic, no Spring
-annotations, no database or Kafka client code. The moment something in here
-needs a `@Service` or a `JdbcTemplate`, it belongs in a real service instead.
-Keeping it dumb-and-dependency-free is what lets every other module safely
-depend on it without dragging in Spring, Kafka, or JPA transitively.
+Every service has to agree on what a message looks like: the same fields, the
+same types. If each service defined its own copy, a mismatch (say, `String` in
+one and `UUID` in another) would only show up when a real message failed to
+load at runtime. With one shared copy, the same mistake becomes a **compile
+error**.
 
-## Status
-Empty. No records exist yet — they'll get added once `agent-service` and
-`control-plane` are far enough along to need a shared `Claim`/`ResearchFinding`
-contract between them (Week 2–3 per `docs/PLAN.md`).
+## Rules for this module
+
+- **Data shapes only.** No business logic, no database or Kafka code. If
+  something here needs a `@Service` or a `JdbcTemplate`, it belongs in a
+  service instead. The one exception is `GuardrailProperties`, which carries a
+  Spring `@ConfigurationProperties` annotation so every service can load the
+  same config block.
+- **Never add `spring-boot-maven-plugin` here.** It turns a module into a
+  runnable "fat jar", which breaks it as a library the other modules depend on.
