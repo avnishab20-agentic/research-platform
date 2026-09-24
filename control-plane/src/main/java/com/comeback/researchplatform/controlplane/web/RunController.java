@@ -127,8 +127,9 @@ public class RunController {
      * progress line) so each tick only sends what is new.
      * <p>
      * Only ever touched by the one poller thread, so plain fields are enough.
+     * Package-visible so RunControllerTest can run one tick directly.
      */
-    private class ProgressPoll implements Runnable {
+    class ProgressPoll implements Runnable {
 
         private final UUID runId;
         private final SseEmitter emitter;
