@@ -30,6 +30,9 @@ spec:
             # is seen as same-origin instead of an http/https mismatch (CORS 403).
             - name: SERVER_FORWARDHEADERSSTRATEGY
               value: native
+            # Where a Google/GitHub login sends the browser back to, with the token in the #fragment.
+            - name: LOGIN_REDIRECT
+              value: https://avnish-research.southindia.cloudapp.azure.com/
           envFrom:
             - configMapRef:
                 name: platform-config

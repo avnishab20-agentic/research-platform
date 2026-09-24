@@ -344,7 +344,94 @@ function Extract({seedUrl}) {
 // Locally this page is served by retrieval-service on :8081 and control-plane is a
 // separate origin on :8083 (@CrossOrigin allows localhost:8081 only). In AKS the
 // front door serves both from one origin, so a relative path is enough.
-const controlApi = (p) => (location.port === '8081' ? 'http://localhost:8083' : '') + `/api/v1${p}`;
+const controlOrigin = location.port === '8081' ? 'http://localhost:8083' : '';
+const controlApi = (p) => `${controlOrigin}/api/v1${p}`;
+
+// Sign-in. control-plane issues a JWT; it is kept in localStorage and sent with every
+// control-plane call. The payload is signed, not encrypted, so reading it here is fine.
+const TOKEN_KEY = 'rp.token';
+let memToken = null; // used when storage is blocked (private window), so sign-in still works this visit
+const claimsOf = (t) => {
+  try { return JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); } catch { return null; }
+};
+const auth = {
+  get() {
+    let t = memToken;
+    try { t = localStorage.getItem(TOKEN_KEY) || memToken; } catch {}
+    const c = t && claimsOf(t);
+    return c && c.exp * 1000 > Date.now() ? t : null;
+  },
+  set(t) {
+    memToken = t;
+    try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {}
+  },
+  headers() { const t = auth.get(); return t ? {Authorization: `Bearer ${t}`} : {}; }
+};
+// A Google/GitHub login lands back here as #token=...; keep it, then clear it from the address bar.
+(() => {
+  const m = location.hash.match(/token=([^&]+)/);
+  if (m) {
+    auth.set(decodeURIComponent(m[1]));
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+})();
+
+const AUTH_ERRORS = {
+  400: 'Enter an email, and a password of 8 to 72 characters.',
+  401: 'Wrong email or password.',
+  409: 'That email already has an account. Sign in instead.'
+};
+
+function SignIn({onToken}) {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const call = async (path, body) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(controlApi(path), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      if (!r.ok) throw new Error(AUTH_ERRORS[r.status] || 'Sign-in failed. Try again.');
+      onToken((await r.json()).token);
+    } catch (e) {
+      setErr(e instanceof TypeError ? 'Could not reach the server. Is control-plane running?' : e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const submit = (e) => { e.preventDefault(); call(mode === 'login' ? '/auth/login' : '/auth/register', {email, password}); };
+
+  return html`<div class="glass card authcard">
+    <h3>${mode === 'login' ? 'Sign in to ask a question' : 'Create an account'}</h3>
+    <p class="sub">Use Google or GitHub, an email and password, or just try it as a guest.</p>
+    <div class="oauth">
+      <a class="btn ghost" href=${controlOrigin + '/oauth2/authorization/google'}>Continue with Google</a>
+      <a class="btn ghost" href=${controlOrigin + '/oauth2/authorization/github'}>Continue with GitHub</a>
+    </div>
+    <div class="or"><span>or</span></div>
+    <form onSubmit=${submit}>
+      <label class="f" for="auth-email">Email</label>
+      <input id="auth-email" type="email" autocomplete="email" required value=${email} onInput=${e => setEmail(e.target.value)} />
+      <label class="f" for="auth-password">Password</label>
+      <input id="auth-password" type="password" minlength="8" required
+        autocomplete=${mode === 'login' ? 'current-password' : 'new-password'}
+        value=${password} onInput=${e => setPassword(e.target.value)} />
+      ${err && html`<div class="err" role="alert">${err}</div>`}
+      <button class="btn" type="submit" disabled=${busy}>${mode === 'login' ? 'Sign in' : 'Create account'}</button>
+    </form>
+    <div class="authfoot">
+      <button class="linkish" type="button" onClick=${() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(null); }}>
+        ${mode === 'login' ? 'New here? Create an account' : 'Have an account? Sign in'}</button>
+      <button class="btn ghost sm" type="button" disabled=${busy} onClick=${() => call('/auth/guest')}>Continue as guest</button>
+    </div>
+  </div>`;
+}
 
 // Plain-language meaning of each Critic verdict. tone drives the underline colour.
 const VERDICT = {
@@ -593,13 +680,18 @@ function Ask() {
   const [conclusion, setConclusion] = useState(null);
   const [final, setFinal] = useState(null);
   const [err, setErr] = useState(null);
+  const [token, setToken] = useState(auth.get);
   const esRef = useRef(null);
 
   useEffect(() => () => { if (esRef.current) esRef.current.close(); }, []);
 
+  const signIn = (t) => { auth.set(t); setToken(t); setErr(null); };
+  const signOut = (why) => { auth.set(null); setToken(null); setErr(why || null); setPhase('idle'); };
+  const who = token && claimsOf(token);
+
   const loadReport = (runId) => {
-    fetch(controlApi(`/runs/${runId}/report`))
-      .then(r => r.json())
+    fetch(controlApi(`/runs/${runId}/report`), {headers: auth.headers()})
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(report => { setConclusion(report.conclusion || null); setClaims(report.claims.map(c => ({
         id: c.id, t: c.text, v: c.verdict, s: c.sourceUrl, tier: c.tier, e: c.evidencePassage,
         sec: c.section, orig: c.originalText, corr: c.correction
@@ -623,17 +715,19 @@ function Ask() {
 
     fetch(controlApi('/runs'), {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', ...auth.headers()},
       body: JSON.stringify({question: q})
     })
       .then(async r => {
+        if (r.status === 401) { signOut('Your sign-in has expired. Please sign in again.'); throw new Error('signed out'); }
         // 429 = the site's daily run cap; show the server's own wording instead of "can't reach".
         if (r.status === 429) throw new Error((await r.json().catch(() => ({}))).message || 'The daily research limit has been reached.');
         if (!r.ok) throw new Error('submit failed');
         return r.json();
       })
       .then(({runId}) => {
-        const es = new EventSource(controlApi(`/runs/${runId}/events`));
+        // EventSource can't send headers, so the stream takes the token in the URL.
+        const es = new EventSource(controlApi(`/runs/${runId}/events?token=${encodeURIComponent(auth.get() || '')}`));
         esRef.current = es;
         es.addEventListener('activity', (ev) => {
           const a = JSON.parse(ev.data);
@@ -655,7 +749,8 @@ function Ask() {
           es.close();
         };
       })
-      .catch((e) => { setErr(e.message !== 'submit failed' && !(e instanceof TypeError) ? e.message
+      .catch((e) => { if (e.message === 'signed out') return;
+        setErr(e.message !== 'submit failed' && !(e instanceof TypeError) ? e.message
         : 'Could not reach the server. Is control-plane running?'); setPhase('idle'); });
   };
 
@@ -667,12 +762,15 @@ function Ask() {
         web and writes an answer. A separate fact-checker then tests every sentence against its source and fixes
         the ones that don't hold up.</p>
       ${err && html`<div class="err" style=${{marginBottom: 14, textAlign: 'left'}}>${err}</div>`}
-      <form class="askbox" onSubmit=${run}>
-        <input type="text" aria-label="Your question" value=${question} onInput=${e => setQuestion(e.target.value)}
-          placeholder="Ask a research question…" />
-        <button class="btn" type="submit" disabled=${!question.trim()}>Research it →</button>
-      </form>
-      <${Examples} items=${EXAMPLES} onPick=${setQuestion} />
+      ${!token ? html`<${SignIn} onToken=${signIn} />` : html`
+        <form class="askbox" onSubmit=${run}>
+          <input type="text" aria-label="Your question" value=${question} onInput=${e => setQuestion(e.target.value)}
+            placeholder="Ask a research question…" />
+          <button class="btn" type="submit" disabled=${!question.trim()}>Research it →</button>
+        </form>
+        <div class="whoami">${who && who.role === 'GUEST' ? 'Asking as a guest' : 'Signed in'}
+          · <button class="linkish" type="button" onClick=${() => signOut()}>Sign out</button></div>
+        <${Examples} items=${EXAMPLES} onPick=${setQuestion} />`}
       <div class="team">
         ${TEAM.map(m => html`<div class="member ${m.cls}" key=${m.name}>
           <div class="who"><span class="av sm ${m.cls}">${m.short}</span>${m.name}</div>
