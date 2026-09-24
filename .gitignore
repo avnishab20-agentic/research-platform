@@ -8,3 +8,13 @@ target/
 # graphify generated output (rebuildable from source)
 graphify-out/
 zshrc
+# Secrets never belong in the repo. .env.example is the committed template.
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+kubeconfig*
+*secret*.yaml
+*secret*.yml

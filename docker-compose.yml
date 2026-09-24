@@ -59,6 +59,8 @@ services:
       - ./searxng:/etc/searxng
     environment:
       - SEARXNG_BASE_URL=http://localhost:8080
+      # Read from .env (gitignored). The fallback is for local runs only.
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-local-dev-only-not-secret}
 
 
   extractor:

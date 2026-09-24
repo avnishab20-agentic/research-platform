@@ -23,6 +23,14 @@ spec:
           env:
             - name: SEARXNG_BASE_URL
               value: http://searxng:8080/
+            # Kept in the app-secrets Secret, never in the repo. optional so a missing key
+            # falls back to settings.yml's placeholder instead of blocking the pod.
+            - name: SEARXNG_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: SEARXNG_SECRET
+                  optional: true
           volumeMounts:
             # subPath mounts only the file, so the rest of /etc/searxng stays writable for the image's entrypoint.
             - name: settings
