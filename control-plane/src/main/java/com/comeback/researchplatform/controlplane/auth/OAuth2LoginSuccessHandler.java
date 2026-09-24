@@ -33,8 +33,22 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         this.props = props;
     }
 
+    /** The three queries for one provider, written out in full so no SQL is ever assembled at runtime. */
+    private record ProviderSql(String name, String find, String link, String insert) {}
+
+    private static final ProviderSql GOOGLE = new ProviderSql("google",
+            "SELECT id FROM users WHERE google_id = ?",
+            "UPDATE users SET google_id = ? WHERE email = ? AND google_id IS NULL RETURNING id",
+            "INSERT INTO users (email, google_id) VALUES (?, ?) RETURNING id");
+
+    private static final ProviderSql GITHUB = new ProviderSql("github",
+            "SELECT id FROM users WHERE github_id = ?",
+            "UPDATE users SET github_id = ? WHERE email = ? AND github_id IS NULL RETURNING id",
+            "INSERT INTO users (email, github_id) VALUES (?, ?) RETURNING id");
+
     @Override
-    @Transactional
+    // rollbackFor: a failed redirect (IOException, checked) must also undo the login_events row.
+    @Transactional(rollbackFor = Exception.class)
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
                                         Authentication authentication) throws IOException {
         var oauth = (OAuth2AuthenticationToken) authentication;
@@ -44,10 +58,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         UUID userId = switch (provider) {
             // Only a verified email may link to an existing account; otherwise anyone could
             // add an unverified address at Google and take over the password account behind it.
-            case "google" -> findOrCreate("google_id", (String) attrs.get("sub"),
+            case "google" -> findOrCreate(GOOGLE, (String) attrs.get("sub"),
                     Boolean.TRUE.equals(attrs.get("email_verified")) ? (String) attrs.get("email") : null);
             // GitHub only shows an email if the user made it public, and a public one is verified.
-            case "github" -> findOrCreate("github_id", String.valueOf(attrs.get("id")), (String) attrs.get("email"));
+            case "github" -> findOrCreate(GITHUB, String.valueOf(attrs.get("id")), (String) attrs.get("email"));
             default -> throw new IllegalStateException("unknown login provider: " + provider);
         };
 
@@ -66,34 +80,25 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         response.sendRedirect(props.loginRedirect() + "#token=" + jwtUtil.generate(userId.toString(), "USER"));
     }
 
-    // idColumn is always one of the two literals above, never user input, so concatenating it is safe.
-    private UUID findOrCreate(String idColumn, String providerId, String email) {
+    private UUID findOrCreate(ProviderSql sql, String providerId, String email) {
         // 1. Logged in with this provider before.
-        List<UUID> found = jdbc.queryForList(
-                "SELECT id FROM users WHERE " + idColumn + " = ?", UUID.class, providerId);
+        List<UUID> found = jdbc.queryForList(sql.find(), UUID.class, providerId);
         if (!found.isEmpty()) {
             return found.get(0);
         }
         if (email == null) {
             // Nothing trustworthy to link or store. .invalid is a reserved TLD: it can never
             // be a real inbox, so it can never collide with a real account's email.
-            return insert(idColumn, providerId, idColumn + "-" + providerId + "@no-email.invalid");
+            return jdbc.queryForObject(sql.insert(), UUID.class,
+                    sql.name() + "-" + providerId + "@no-email.invalid", providerId);
         }
         String normalized = email.trim().toLowerCase();
         // 2. Same email already has an account (password or the other provider): attach to it.
-        List<UUID> linked = jdbc.queryForList(
-                "UPDATE users SET " + idColumn + " = ? WHERE email = ? AND " + idColumn + " IS NULL RETURNING id",
-                UUID.class, providerId, normalized);
+        List<UUID> linked = jdbc.queryForList(sql.link(), UUID.class, providerId, normalized);
         if (!linked.isEmpty()) {
             return linked.get(0);
         }
         // 3. Brand new person.
-        return insert(idColumn, providerId, normalized);
-    }
-
-    private UUID insert(String idColumn, String providerId, String email) {
-        return jdbc.queryForObject(
-                "INSERT INTO users (email, " + idColumn + ") VALUES (?, ?) RETURNING id",
-                UUID.class, email, providerId);
+        return jdbc.queryForObject(sql.insert(), UUID.class, normalized, providerId);
     }
 }

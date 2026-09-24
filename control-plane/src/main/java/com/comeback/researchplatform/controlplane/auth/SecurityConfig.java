@@ -22,7 +22,9 @@ public class SecurityConfig {
                                            OAuth2LoginSuccessHandler oauth2SuccessHandler) throws Exception {
         return http
                 // CSRF attacks ride on cookies; the token travels in a header, so there's nothing to forge.
-                .csrf(AbstractHttpConfigurer::disable)
+                // The only session is the OAuth2 redirect's, protected by its own state parameter
+                // and invalidated by OAuth2LoginSuccessHandler as soon as the token is issued.
+                .csrf(AbstractHttpConfigurer::disable) // NOSONAR java:S4502 -- bearer-token API, see above
                 // Lets RunController's @CrossOrigin answer the browser's preflight instead of a 401.
                 .cors(Customizer.withDefaults())
                 // No STATELESS here: the Google/GitHub redirect dance keeps its state in a short-lived
