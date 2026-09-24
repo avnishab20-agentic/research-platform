@@ -12,14 +12,10 @@
 name: backend-pr-validation
 
 on:
+  # Every pull request, with no path filter: the SonarQube Cloud check posted by
+  # this workflow is a required check, and a required check that never runs
+  # (say, on a docs-only PR) would block the merge forever.
   pull_request:
-    paths:
-      - pom.xml
-      - common/**
-      - retrieval-service/**
-      - agent-service/**
-      - control-plane/**
-      - .github/workflows/backend-pr-validation.yml
   push:
     branches: [main]
     paths:
