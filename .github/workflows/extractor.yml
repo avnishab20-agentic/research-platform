@@ -7,9 +7,16 @@ on:
       - extractor/**
       - .github/workflows/extractor.yml
       - .github/workflows/_build-deploy.yml
+  # Pull requests run the test stage only; build, deploy and verify wait for main.
+  pull_request:
+    paths:
+      - extractor/**
+      - .github/workflows/extractor.yml
+      - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
-concurrency: ${{ github.workflow }}
+# One run at a time per branch, so two deploys to the cluster never overlap.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   actions: read
@@ -17,11 +24,16 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  pipeline:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
+      test-setup: python
+      test-command: cd extractor && pip install -r requirements.txt && python smoke_test.py
       image: extractor
       dockerfile: ./extractor/Dockerfile
       context: ./extractor
       manifests: ./extractor/k8s
+      deployment: extractor
+      health-port: '8000'
+      health-path: /health

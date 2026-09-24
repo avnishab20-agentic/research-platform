@@ -9,9 +9,16 @@ on:
       - k8s/**
       - .github/workflows/platform.yml
       - .github/workflows/_build-deploy.yml
+  # Pull requests run the test stage only; deploy waits for main.
+  pull_request:
+    paths:
+      - k8s/**
+      - .github/workflows/platform.yml
+      - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
-concurrency: ${{ github.workflow }}
+# One run at a time per branch, so two deploys to the cluster never overlap.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   actions: read
@@ -19,8 +26,10 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  pipeline:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
+      # Fails on a YAML typo before anything reaches the cluster.
+      test-command: for f in k8s/*.yaml; do yq 'true' "$f" > /dev/null || exit 1; done
       manifests: ./k8s

@@ -9,9 +9,18 @@ on:
       - pom.xml
       - .github/workflows/control-plane.yml
       - .github/workflows/_build-deploy.yml
+  # Pull requests run the test stage only; build, deploy and verify wait for main.
+  pull_request:
+    paths:
+      - control-plane/**
+      - common/**
+      - pom.xml
+      - .github/workflows/control-plane.yml
+      - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
-concurrency: ${{ github.workflow }}
+# One run at a time per branch, so two deploys to the cluster never overlap.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   actions: read
@@ -19,10 +28,19 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  pipeline:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
+      test-setup: java
+      # ControlPlaneApplicationTests boots the whole app, and Flyway needs a live
+      # Postgres for that, which the CI runner doesn't have. Every other test runs.
+      test-command: >-
+        mvn -B -pl control-plane -am test
+        -Dtest='!ControlPlaneApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false
       image: control-plane
       dockerfile: ./control-plane/Dockerfile
       manifests: ./control-plane/k8s
+      deployment: control-plane
+      health-port: '8083'
+      health-path: /actuator/health
