@@ -35,6 +35,8 @@ public class SecurityConfig {
                         // SSE finishes on an ASYNC dispatch and errors render on an ERROR one; the
                         // original request was already checked, so don't turn these into 401s.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
+                        // The one auth path that needs a token: it is how the front door checks one.
+                        .requestMatchers("/api/v1/auth/check").authenticated()
                         .requestMatchers("/api/v1/auth/**", "/actuator/health", "/oauth2/**", "/login/**").permitAll()
                         .anyRequest().authenticated())
                 // A plain 401, not Spring's default redirect to a login form.
