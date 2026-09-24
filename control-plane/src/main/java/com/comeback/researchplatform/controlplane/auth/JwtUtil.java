@@ -4,6 +4,7 @@ import com.comeback.researchplatform.controlplane.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
@@ -38,8 +39,13 @@ public class JwtUtil {
                 .compact();
     }
 
-    /** Throws JwtException if the signature is wrong or the token has expired. */
+    /** Throws JwtException if the token is empty, the signature is wrong, or it has expired. */
     public Claims parse(String token) {
+        // JJWT throws IllegalArgumentException on an empty string, which callers don't catch:
+        // "?token=" or a bare "Bearer " would be a 500 instead of a 401.
+        if (token == null || token.isBlank()) {
+            throw new MalformedJwtException("empty token");
+        }
         return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     }
 

@@ -63,6 +63,12 @@ class JwtUtilTest {
     }
 
     @Test
+    void anEmptyTokenIsAJwtExceptionNotACrash() {
+        assertThatThrownBy(() -> util().parse("")).isInstanceOf(JwtException.class);
+        assertThatThrownBy(() -> util().parse(null)).isInstanceOf(JwtException.class);
+    }
+
+    @Test
     void aSecretShorterThan32BytesStopsStartup() {
         assertThatThrownBy(() -> utilWith(new byte[16], Duration.ofHours(1)))
                 .isInstanceOf(WeakKeyException.class);
