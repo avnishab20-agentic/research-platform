@@ -1,6 +1,7 @@
 package com.comeback.researchplatform.controlplane.web;
 
 import com.comeback.researchplatform.controlplane.planner.PlannerService;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -44,15 +45,27 @@ public class RunController {
     // a step along the way, not a place a run stops.
     private static final Set<String> TERMINAL_STATUSES = Set.of("VERIFIED", "UNVERIFIED", "PARTIAL");
     private static final int LEVEL = 0; // flat fan-out only this month, same as FanInService
+    // Threads shared by every open progress stream. Each tick is a few quick
+    // queries, so a handful of threads serves many browsers at once.
+    private static final int POLLER_THREADS = 4;
 
     private final PlannerService plannerService;
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    // One scheduler for the whole controller, not one per stream: a stream only
+    // starts and cancels its own timer, and the threads are closed once, in
+    // shutdown(), when the app stops.
+    private final ScheduledExecutorService poller = Executors.newScheduledThreadPool(POLLER_THREADS);
 
     public RunController(PlannerService plannerService, JdbcTemplate jdbc, ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.plannerService = plannerService;
         this.jdbc = jdbc;
+    }
+
+    @PreDestroy
+    void shutdown() {
+        poller.shutdownNow();
     }
 
     @PostMapping
@@ -99,34 +112,29 @@ public class RunController {
         // default) so a slow-but-legitimate run isn't cut off by the
         // transport before the guardrail itself would have ended it.
         SseEmitter emitter = new SseEmitter(15 * 60 * 1000L);
-        ScheduledExecutorService poller = Executors.newSingleThreadScheduledExecutor();
-        ScheduledFuture<?> future = poller.scheduleAtFixedRate(
+        ScheduledFuture<?> ticks = poller.scheduleAtFixedRate(
                 new ProgressPoll(id, emitter), 0, 1, TimeUnit.SECONDS);
 
-        // All three completion paths (client disconnect, 15-min timeout, a
-        // poll throwing) must stop the poller -- otherwise every finished
-        // stream leaks one live scheduled thread forever.
-        emitter.onCompletion(() -> stopPolling(future, poller));
+        // All three ways a stream ends (client disconnect, 15-min timeout, a
+        // poll throwing) must cancel its timer -- otherwise every finished
+        // stream would keep querying Postgres once a second forever.
+        emitter.onCompletion(() -> ticks.cancel(false));
         emitter.onTimeout(() -> {
-            stopPolling(future, poller);
+            ticks.cancel(false);
             emitter.complete();
         });
-        emitter.onError(e -> stopPolling(future, poller));
+        emitter.onError(e -> ticks.cancel(false));
 
         return emitter;
     }
 
-    private static void stopPolling(ScheduledFuture<?> future, ScheduledExecutorService poller) {
-        future.cancel(true);
-        poller.shutdown();
-    }
-
     /**
-     * One tick of the SSE stream, run once a second on the poller thread. It
+     * One tick of the SSE stream, run once a second by the shared poller. It
      * remembers what it already sent (the last activity id and the last
      * progress line) so each tick only sends what is new.
      * <p>
-     * Only ever touched by the one poller thread, so plain fields are enough.
+     * The scheduler never runs two ticks of the same stream at once, and each
+     * tick sees what the previous one wrote, so plain fields are enough.
      * Package-visible so RunControllerTest can run one tick directly.
      */
     class ProgressPoll implements Runnable {

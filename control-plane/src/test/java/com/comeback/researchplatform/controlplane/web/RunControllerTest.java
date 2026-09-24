@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -154,6 +155,21 @@ class RunControllerTest {
         controller.new ProgressPoll(runId, emitter).run();
 
         verify(emitter).completeWithError(failure);
+    }
+
+    @Test
+    void openingAStreamStartsPollingOnTheSharedScheduler() {
+        runIs("RUNNING");
+        newActivity();
+        try {
+            assertThat(controller.events(runId)).isNotNull();
+
+            // The first tick runs straight away on the scheduler's own thread.
+            verify(jdbc, timeout(3000).atLeastOnce())
+                    .queryForObject(startsWith("SELECT status FROM runs"), eq(String.class), eq(runId));
+        } finally {
+            controller.shutdown();
+        }
     }
 
     @Test

@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/login@v2.2.0
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -129,17 +129,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/login@v2.2.0
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: azure/use-kubelogin@v1
+      - uses: azure/use-kubelogin@76597ae0fcbaace21b05e13a2cbf8daee2c6e820 # v1.2
         with:
           kubelogin-version: 'v0.0.25'
 
-      - uses: azure/aks-set-context@v4
+      - uses: azure/aks-set-context@c7eb093e5a5d47caa333f64974d5fd1cd4bf069d # v4.0.3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
@@ -153,7 +153,7 @@ jobs:
         if: inputs.pre-deploy != ''
         run: ${{ inputs.pre-deploy }}
 
-      - uses: Azure/k8s-deploy@v5
+      - uses: Azure/k8s-deploy@c8cfec839dc09896b3b8cc40cd13d04792680771 # v5.1.0
         with:
           action: deploy
           namespace: ${{ env.NAMESPACE }}
@@ -177,17 +177,17 @@ jobs:
       HEALTH_PORT: ${{ inputs.health-port }}
       HEALTH_PATH: ${{ inputs.health-path }}
     steps:
-      - uses: azure/login@v2.2.0
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: azure/use-kubelogin@v1
+      - uses: azure/use-kubelogin@76597ae0fcbaace21b05e13a2cbf8daee2c6e820 # v1.2
         with:
           kubelogin-version: 'v0.0.25'
 
-      - uses: azure/aks-set-context@v4
+      - uses: azure/aks-set-context@c7eb093e5a5d47caa333f64974d5fd1cd4bf069d # v4.0.3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
