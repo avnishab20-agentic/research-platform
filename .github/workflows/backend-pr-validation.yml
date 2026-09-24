@@ -1,10 +1,14 @@
-# Checks a pull request's backend changes before merge. Never deploys and needs
-# no secrets, so it does not use _build-deploy.yml.
+# Checks a pull request's backend changes before merge. Never deploys, so it does
+# not use _build-deploy.yml.
 #
 #   maven  -> compile, test and package every module together, so a change in one
 #             module (common/ especially) that breaks another is caught here.
+#             Then send the code and its test coverage to SonarQube Cloud.
 #   docker -> build each service's image without pushing it, to prove the
-#             Dockerfile still works.
+#             Dockerfile still works. Pull requests only.
+#
+# It also runs on pushes to main. That run is only there to give SonarQube Cloud
+# a baseline, so it can tell which problems a pull request adds.
 name: backend-pr-validation
 
 on:
@@ -16,9 +20,18 @@ on:
       - agent-service/**
       - control-plane/**
       - .github/workflows/backend-pr-validation.yml
+  push:
+    branches: [main]
+    paths:
+      - pom.xml
+      - common/**
+      - retrieval-service/**
+      - agent-service/**
+      - control-plane/**
+      - .github/workflows/backend-pr-validation.yml
   workflow_dispatch:
 
-# A new push to the same PR cancels the older, now-outdated run.
+# A new push to the same branch cancels the older, now-outdated run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -29,8 +42,15 @@ permissions:
 jobs:
   maven:
     runs-on: ubuntu-latest
+    env:
+      # Empty until the SONAR_TOKEN repo secret is added (and always empty on pull
+      # requests from forks), in which case the scan step below is skipped.
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: Sonar uses it to work out which lines are new in this change.
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -40,13 +60,20 @@ jobs:
 
       # ControlPlaneApplicationTests boots the whole app, and Flyway needs a live
       # Postgres for that, which the CI runner doesn't have. Every other test runs.
+      # verify also writes each module's JaCoCo coverage report.
       - name: Compile, test and package all modules
         run: >-
           mvn -B verify
           -Dtest='!ControlPlaneApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false
 
+      # Project key and organization come from the root pom.xml.
+      - name: SonarQube Cloud scan
+        if: env.SONAR_TOKEN != ''
+        run: mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+
   docker:
     needs: maven
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       # Report every broken image, not just the first one.
