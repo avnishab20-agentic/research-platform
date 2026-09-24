@@ -29,6 +29,13 @@ public class RunUsageGuard {
 
     private static final Logger log = LoggerFactory.getLogger(RunUsageGuard.class);
 
+    // One complete statement per counter. Written out in full rather than built
+    // from the column name, so no part of the SQL text is ever assembled at runtime.
+    private static final String COUNT_SEARCH =
+            "UPDATE run_usage SET searches = searches + 1 WHERE run_id = ? RETURNING searches";
+    private static final String COUNT_LLM_CALL =
+            "UPDATE run_usage SET llm_calls = llm_calls + 1 WHERE run_id = ? RETURNING llm_calls";
+
     private final JdbcTemplate jdbc;
     private final GuardrailProperties guardrails;
 
@@ -38,22 +45,18 @@ public class RunUsageGuard {
     }
 
     public boolean trySearch(UUID runId) {
-        return tryConsume(runId, "searches", guardrails.run().maxSearches());
+        return tryConsume(runId, COUNT_SEARCH, "searches", guardrails.run().maxSearches());
     }
 
     public boolean tryLlmCall(UUID runId) {
-        return tryConsume(runId, "llm_calls", guardrails.run().maxLlmCalls());
+        return tryConsume(runId, COUNT_LLM_CALL, "llm_calls", guardrails.run().maxLlmCalls());
     }
 
-    private boolean tryConsume(UUID runId, String column, int max) {
-        int used;
+    /** {@code column} is only used in log messages; {@code countSql} does the counting. */
+    private boolean tryConsume(UUID runId, String countSql, String column, int max) {
+        Integer used;
         try {
-            // Column name is one of two fixed literals above, never request
-            // input -- safe to interpolate into the SQL text.
-            used = jdbc.queryForObject(
-                    "UPDATE run_usage SET " + column + " = " + column + " + 1 "
-                            + "WHERE run_id = ? RETURNING " + column,
-                    Integer.class, runId);
+            used = jdbc.queryForObject(countSql, Integer.class, runId);
         } catch (EmptyResultDataAccessException e) {
             // No run_usage row -- a run from before this guardrail existed,
             // or a race with the row's own insert. Fail open: a missing
@@ -63,7 +66,9 @@ public class RunUsageGuard {
             return true;
         }
 
-        if (used <= max) {
+        // null can't really come back from RETURNING on a real row; treat it like
+        // the missing-row case above and fail open.
+        if (used == null || used <= max) {
             return true;
         }
         if (guardrails.mode() == GuardrailMode.ENFORCE) {

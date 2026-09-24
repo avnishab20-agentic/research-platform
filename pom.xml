@@ -24,6 +24,9 @@
         <sonar.organization>avnishab20-agentic</sonar.organization>
         <sonar.projectKey>avnishab20-agentic_research-platform</sonar.projectKey>
         <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <!-- Third-party minified JS (React, htm) copied in so the page needs no CDN.
+             Not our code, so not something Sonar should grade. -->
+        <sonar.exclusions>**/static/vendor/**</sonar.exclusions>
     </properties>
 
     <dependencyManagement>

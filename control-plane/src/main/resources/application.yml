@@ -4,7 +4,10 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/research
     username: research
-    password: research
+    # Read from the environment so no real password lives in this file. The
+    # "research" after the colon is only the fallback for the local
+    # docker-compose Postgres (same value as docker-compose.yml).
+    password: ${SPRING_DATASOURCE_PASSWORD:research}
   jpa:
     hibernate:
       ddl-auto: validate
