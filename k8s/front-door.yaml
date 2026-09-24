@@ -1,6 +1,6 @@
 # One public entry point, with automatic HTTPS (Caddy gets and renews a Let's Encrypt
-# certificate): the console and retrieval APIs go to retrieval-service, /api/v1/runs goes to
-# control-plane. Same origin for both, so the browser needs no CORS.
+# certificate). Only the page shell and sign-in are public; every other path needs a valid
+# token, checked by control-plane (forward_auth) before retrieval-service ever sees it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,17 +9,32 @@ metadata:
 data:
   Caddyfile: |
     avnish-research.southindia.cloudapp.azure.com {
-      # Runs, plus sign-in: the auth API, the start of a Google/GitHub login (/oauth2/...)
-      # and the provider's redirect back (/login/oauth2/code/...).
-      @control path /api/v1/runs* /api/v1/auth/* /oauth2/* /login/oauth2/*
-      handle @control {
-        # Caddy keeps the browser's Host and sets X-Forwarded-Proto, which control-plane
-        # needs to see the request as same-origin. flush_interval -1 streams SSE events at once.
+      # Sign-in, and the Google/GitHub round trip: public, or nobody could ever get a token.
+      @signin path /api/v1/auth/* /oauth2/* /login/oauth2/*
+      handle @signin {
+        reverse_proxy control-plane:8083
+      }
+      # Runs: control-plane checks the token itself (including the SSE stream's ?token=, which
+      # forward_auth would not see). Caddy keeps the browser's Host and sets X-Forwarded-Proto,
+      # which control-plane needs to see the request as same-origin. flush_interval -1 streams
+      # SSE events at once.
+      handle /api/v1/runs* {
         reverse_proxy control-plane:8083 {
           flush_interval -1
         }
       }
+      # The page shell and its scripts: public, but they hold no data -- the page shows the
+      # login screen until it has a token, and every call it makes needs one.
+      @shell path / /index.html /app.js /charts.js /topology.js /vendor/*
+      handle @shell {
+        reverse_proxy retrieval-service-cicd:8081
+      }
+      # Everything else -- search, extract, quota, actuator, any path added later -- needs a
+      # valid token first. control-plane answers 204 or 401; a 401 goes straight back.
       handle {
+        forward_auth control-plane:8083 {
+          uri /api/v1/auth/check
+        }
         reverse_proxy retrieval-service-cicd:8081
       }
     }
@@ -58,7 +73,7 @@ spec:
         app.kubernetes.io/name: front-door
       annotations:
         # Bump when the Caddyfile changes so the pod restarts and reloads it.
-        config-version: "4"
+        config-version: "5"
     spec:
       containers:
         - name: caddy

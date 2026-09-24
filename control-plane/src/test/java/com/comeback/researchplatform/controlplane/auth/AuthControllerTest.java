@@ -150,6 +150,11 @@ class AuthControllerTest {
     }
 
     @Test
+    void checkAnswers204WhenTheFilterHasLetTheRequestThrough() {
+        assertThat(controller.check().getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
     void refreshSwapsAValidTokenForANewOneAndRejectsABadOne() {
         String token = jwtUtil.generate("user-1", "USER");
 

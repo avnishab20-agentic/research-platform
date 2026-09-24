@@ -127,7 +127,7 @@ function Retrieve({onQuota, onExtractUrl}) {
     setBusy(true); setErr(null);
     const t0 = performance.now();
     try {
-      const r = await fetch(api('/search'), {
+      const r = await authFetch(api('/search'), {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({queries, maxResults: Number(maxResults), freshness: freshness || null, minTier: Number(minTier)})
       });
@@ -267,7 +267,7 @@ function Extract({seedUrl}) {
     setBusy(true); setErr(null); setOpen({});
     const t0 = performance.now();
     try {
-      const r = await fetch(api('/extract'), {
+      const r = await authFetch(api('/extract'), {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({urls: list})
       });
@@ -367,6 +367,15 @@ const auth = {
   },
   headers() { const t = auth.get(); return t ? {Authorization: `Bearer ${t}`} : {}; }
 };
+
+// Every API call goes through here: it adds the token, and a 401 from any service sends the
+// whole app back to the login screen. App sets onUnauthorized once it has mounted.
+let onUnauthorized = () => {};
+const authFetch = (url, opts = {}) =>
+  fetch(url, {...opts, headers: {...(opts.headers || {}), ...auth.headers()}}).then(r => {
+    if (r.status === 401) onUnauthorized();
+    return r;
+  });
 // A Google/GitHub login lands back here as #token=...; keep it, then clear it from the address bar.
 (() => {
   const m = location.hash.match(/token=([^&]+)/);
@@ -408,7 +417,7 @@ function SignIn({onToken}) {
   const submit = (e) => { e.preventDefault(); call(mode === 'login' ? '/auth/login' : '/auth/register', {email, password}); };
 
   return html`<div class="glass card authcard">
-    <h3>${mode === 'login' ? 'Sign in to ask a question' : 'Create an account'}</h3>
+    <h3>${mode === 'login' ? 'Sign in to continue' : 'Create an account'}</h3>
     <p class="sub">Use Google or GitHub, an email and password, or just try it as a guest.</p>
     <div class="oauth">
       <a class="btn ghost" href=${controlOrigin + '/oauth2/authorization/google'}>Continue with Google</a>
@@ -680,17 +689,12 @@ function Ask() {
   const [conclusion, setConclusion] = useState(null);
   const [final, setFinal] = useState(null);
   const [err, setErr] = useState(null);
-  const [token, setToken] = useState(auth.get);
   const esRef = useRef(null);
 
   useEffect(() => () => { if (esRef.current) esRef.current.close(); }, []);
 
-  const signIn = (t) => { auth.set(t); setToken(t); setErr(null); };
-  const signOut = (why) => { auth.set(null); setToken(null); setErr(why || null); setPhase('idle'); };
-  const who = token && claimsOf(token);
-
   const loadReport = (runId) => {
-    fetch(controlApi(`/runs/${runId}/report`), {headers: auth.headers()})
+    authFetch(controlApi(`/runs/${runId}/report`))
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(report => { setConclusion(report.conclusion || null); setClaims(report.claims.map(c => ({
         id: c.id, t: c.text, v: c.verdict, s: c.sourceUrl, tier: c.tier, e: c.evidencePassage,
@@ -713,13 +717,13 @@ function Ask() {
     setPhase('plan');
     window.scrollTo(0, 0);
 
-    fetch(controlApi('/runs'), {
+    authFetch(controlApi('/runs'), {
       method: 'POST',
-      headers: {'Content-Type': 'application/json', ...auth.headers()},
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({question: q})
     })
       .then(async r => {
-        if (r.status === 401) { signOut('Your sign-in has expired. Please sign in again.'); throw new Error('signed out'); }
+        if (r.status === 401) throw new Error('signed out'); // authFetch already sent the app to the login screen
         // 429 = the site's daily run cap; show the server's own wording instead of "can't reach".
         if (r.status === 429) throw new Error((await r.json().catch(() => ({}))).message || 'The daily research limit has been reached.');
         if (!r.ok) throw new Error('submit failed');
@@ -762,15 +766,12 @@ function Ask() {
         web and writes an answer. A separate fact-checker then tests every sentence against its source and fixes
         the ones that don't hold up.</p>
       ${err && html`<div class="err" style=${{marginBottom: 14, textAlign: 'left'}}>${err}</div>`}
-      ${!token ? html`<${SignIn} onToken=${signIn} />` : html`
-        <form class="askbox" onSubmit=${run}>
-          <input type="text" aria-label="Your question" value=${question} onInput=${e => setQuestion(e.target.value)}
-            placeholder="Ask a research question…" />
-          <button class="btn" type="submit" disabled=${!question.trim()}>Research it →</button>
-        </form>
-        <div class="whoami">${who && who.role === 'GUEST' ? 'Asking as a guest' : 'Signed in'}
-          · <button class="linkish" type="button" onClick=${() => signOut()}>Sign out</button></div>
-        <${Examples} items=${EXAMPLES} onPick=${setQuestion} />`}
+      <form class="askbox" onSubmit=${run}>
+        <input type="text" aria-label="Your question" value=${question} onInput=${e => setQuestion(e.target.value)}
+          placeholder="Ask a research question…" />
+        <button class="btn" type="submit" disabled=${!question.trim()}>Research it →</button>
+      </form>
+      <${Examples} items=${EXAMPLES} onPick=${setQuestion} />
       <div class="team">
         ${TEAM.map(m => html`<div class="member ${m.cls}" key=${m.name}>
           <div class="who"><span class="av sm ${m.cls}">${m.short}</span>${m.name}</div>
@@ -818,7 +819,24 @@ const NAV = [
 ];
 const IDS = NAV.map(n => n[0]);
 
+function LoginScreen({onToken, notice}) {
+  return html`<div class="hero login rise">
+    <div class="brand"><span class="mark" />Research Platform</div>
+    <div class="kicker"><i />A team of AI agents · every sentence fact-checked</div>
+    <h1>Answers that <em>check their own work.</em></h1>
+    ${notice && html`<div class="err" role="status">${notice}</div>`}
+    <${SignIn} onToken=${onToken} />
+  </div>`;
+}
+
 function App() {
+  const [token, setToken] = useState(auth.get);
+  const [notice, setNotice] = useState(null);
+  const signIn = (t) => { auth.set(t); setToken(t); setNotice(null); };
+  const signOut = (why) => { auth.set(null); setToken(null); setNotice(why || null); };
+  onUnauthorized = () => signOut('Your session has ended. Please sign in again.');
+  const who = token && claimsOf(token);
+
   const [view, setViewState] = useState(() => {
     const h = location.hash.replace('#', '');
     return IDS.includes(h) ? h : 'verify';
@@ -843,7 +861,7 @@ function App() {
   }, [theme]);
 
   const loadQuota = useCallback(async () => {
-    try { setQuota((await (await fetch(api('/quota'))).json()).creditsRemaining); }
+    try { const r = await authFetch(api('/quota')); if (r.ok) setQuota((await r.json()).creditsRemaining); }
     catch { setQuota(null); }
   }, []);
 
@@ -857,10 +875,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!token) return undefined;
     loadQuota();
     const t = setInterval(loadQuota, 20000);
     return () => clearInterval(t);
-  }, [loadQuota]);
+  }, [loadQuota, token]);
+
+  // Every hook above runs on every render; only now may the app bail out to the login screen.
+  if (!token) return html`<${LoginScreen} onToken=${signIn} notice=${notice} />`;
 
   // All views stay mounted; switching tabs only hides them, so state survives.
   const pane = (id, el) => html`<div key=${id} hidden=${view !== id}>${el}</div>`;
@@ -873,6 +895,7 @@ function App() {
           aria-current=${view === id ? 'page' : null} onClick=${() => setView(id)}><span class="ic" aria-hidden="true">${ic}</span>${label}</button>`)}
       </nav>
       <div class="foot">
+        <div class="meta">${who && who.role === 'GUEST' ? 'Signed in as a guest' : 'Signed in'}${' · '}<button class="linkish" type="button" onClick=${() => signOut()}>Sign out</button></div>
         ${quota != null && html`<div class="meta"><b>${quota}</b> search credits left today</div>`}
         <button class="theme" onClick=${toggleTheme}
           aria-label=${`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>

@@ -7,7 +7,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -93,6 +95,14 @@ public TokenResponse guest() {
         } catch (JwtException e) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "token invalid or expired");
         }
+    }
+
+    // The front door (Caddy forward_auth) asks this before letting any request through to
+    // retrieval-service. Reaching the method means JwtAuthFilter accepted the token;
+    // SecurityConfig answers 401 before it gets here otherwise.
+    @GetMapping("/check")
+    public ResponseEntity<Void> check() {
+        return ResponseEntity.noContent().build();
     }
 
     // Stored lowercased: A@Gmail.com and a@gmail.com are one inbox, but UNIQUE compares exact strings.
