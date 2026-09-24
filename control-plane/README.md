@@ -1,64 +1,79 @@
 # control-plane
 
-**Port:** 8083
+**Port 8083.** The front desk. It takes your question, splits it into
+sub-questions, hands them out, notices when they're all answered, and streams
+live progress to the browser. It also owns the database schema: every Flyway
+migration lives here.
 
-## What this is
-The "front door" of the system. It's the only service a browser ever talks to.
-It takes in a research question over REST, breaks it into sub-questions
-(the "planner"), hands them out to `agent-service` over Kafka (the "fan-out"),
-waits for all of them to come back (the "fan-in"), and streams live progress
-to the browser over **SSE** (Server-Sent Events — a plain HTTP connection the
-server keeps open and writes new updates into, so the page can show "3 of 6
-researchers done" without the browser having to keep asking).
+## Endpoints
 
-## How it will work
+| Endpoint | Does |
+|---|---|
+| `POST /api/v1/runs` | start a run: `{"question": "..."}` → `{"runId": "..."}`. Returns **429** once the daily limit (20 runs) is reached |
+| `GET /api/v1/runs/{id}` | the run's question and status |
+| `GET /api/v1/runs/{id}/events` | live progress as SSE (Server-Sent Events: one HTTP connection the server keeps open and writes updates into) |
+| `GET /api/v1/runs/{id}/report` | the finished report: conclusion, every claim, its verdict, evidence sentence and source |
 
-**Fan-out:** the planner emits 6–8 sub-questions onto a Kafka topic. Every
-research run this month is "flat" — no sub-question depends on another
-(see "Why only this" below) — so they can all run in parallel immediately.
+## How it works
 
-**Fan-in — the interesting part:** something has to notice when all 6–8
-researchers have finished so the WRITER can run. The naive way is an in-memory
-counter (`AtomicInteger`, or a `ConcurrentHashMap<runId, count>`). We're
-deliberately **not** doing that:
+**Planner** (`planner/PlannerService`). One DeepSeek call splits the question
+into 5 sub-questions that can each be answered on their own. It saves them and
+publishes one Kafka message per sub-question on `research.subtasks`. Each
+message is keyed by the sub-question's own id, which spreads them across
+partitions so they're researched in parallel.
+
+**Fan-in** (`fanin/FanInService`). Each finished answer runs one SQL statement:
 
 ```sql
 UPDATE dag_levels SET completed = completed + 1
- WHERE run_id = $1 AND level = 0
-RETURNING completed, expected;
+WHERE run_id = ? AND level = 0
+RETURNING completed, expected
 ```
 
-Every researcher finishing calls this one `UPDATE ... RETURNING`. Postgres
-guarantees only one caller can ever be the one that sees `completed == expected`
-right after its own update — so exactly one of them triggers the WRITER, even
-if two finish at the exact same millisecond. And because the count lives in
-the database, not in this JVM's memory, **restarting `control-plane` mid-run
-doesn't lose track of how many researchers have finished.** A background
-"sweeper" also runs every 15s to release any run that's been waiting too long,
-so one stuck researcher can't strand the whole thing forever.
+Postgres applies these one at a time for the same row, so exactly one answer
+sees `completed == expected`, and that one tells the writer to start
+(`run.ready`). The count lives in the database, not in Java memory, so a
+restart doesn't lose it.
 
-## Why it's designed this way
-"Why not just a `Map` in memory?" is a fair question and the honest answer is:
-it works fine right up until you restart the service or run two replicas —
-then the count silently resets or splits across instances, and an in-flight
-research run just hangs forever with no error. Putting the counter in Postgres
-means the atomicity (exactly-once trigger) and the durability (survives a
-restart) both come from the database doing what databases are good at,
-instead of us reinventing distributed counting badly.
+**Deadline sweeper** (`fanin/DeadlineSweeper`). Every 15 seconds, a run whose
+3-minute deadline has passed is marked `PARTIAL` and handed to the writer with
+whatever answers did arrive. One stuck researcher can't block a run forever.
 
-## Why only this — the boundary
-This is the **only** service meant to be reachable from outside — the one
-that will eventually own auth (JWT validation, planned for Week 5).
-`retrieval-service` and `agent-service` are never exposed directly; they only
-talk to each other over the internal Docker network. And per this month's
-explicit scope cut, sub-questions have **no dependencies on each other** — the
-`dag_nodes`/`dag_levels` tables have `depends_on`/`level` columns sitting
-unused on purpose, reserved for a possible future where sub-question B needs
-sub-question A's answer first. Building that now would be solving a problem
-this project doesn't have yet.
+**Live progress** (`web/RunController`). A shared scheduler checks Postgres
+once a second for each open stream and sends only what changed: new activity
+lines, and progress such as "3 of 5 done". The stream closes when the run
+finishes.
 
-## Status
-Skeleton only — the Spring Boot app boots and `/actuator/health` responds, but
-no REST endpoints, SSE handler, planner, or fan-in logic exist yet. Depends on
-`agent-service` producing real findings first, so this comes together in
-Week 2 per `docs/PLAN.md`.
+## Database migrations
+
+`src/main/resources/db/migration/V1…V5`. Flyway runs them on startup, and
+Hibernate only checks that the tables match (`ddl-auto: validate`). To change
+the schema, add a new `V6__…sql` file. Never edit one that has already run.
+The tables are explained in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#database-tables-postgres).
+
+## Key settings (`application.yml`)
+
+| Block | Controls |
+|---|---|
+| `planner` | sub-questions per run (`min-fan-out`, `max-fan-out`), runs per day, fan-in deadline |
+| `spring.kafka` | see [docs/KAFKA.md](../docs/KAFKA.md) |
+| `spring.datasource` | database; the password comes from `SPRING_DATASOURCE_PASSWORD` |
+
+## Why the counter is in Postgres
+
+A Java counter (`AtomicInteger`, `ConcurrentHashMap`) is simpler, until the
+service restarts (the count is gone and the run waits forever) or you run two
+copies (each has its own count). The database row gets both right: exactly one
+trigger, and it survives restarts. This was proven by killing
+`agent-service` in the middle of a run; see
+[the restart-survival log](../docs/progress/2026-09-22l-restart-survival-demo.md).
+
+## Run and test
+
+```bash
+mvn -pl control-plane -am test -Dtest='!ControlPlaneApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false
+mvn -pl control-plane spring-boot:run   # needs Postgres, Kafka, DEEPSEEK_API_KEY
+```
+
+`ControlPlaneApplicationTests` starts the whole app, so it needs a running
+Postgres (`docker compose up -d`). The other tests need nothing.

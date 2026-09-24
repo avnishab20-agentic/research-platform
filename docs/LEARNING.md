@@ -234,13 +234,17 @@ The project gives you **stories**, not coverage. Interviews want both.
 ## DevOps
 
 ### Pipeline design
-**Built in:** `.github/workflows/`, weeks 1 and 4
+**Built in:** `.github/workflows/` (details: [DEPLOYMENT.md](DEPLOYMENT.md))
 
 > "Walk me through your CI/CD."
 
-Trigger → build/test → publish images → manual deploy. Know why each stage is
-separate: tests gate merges, images are built once and promoted (never rebuilt
-per environment), deploys are deliberate.
+Pull request → `backend-pr-validation` (build, all tests, coverage, Docker
+builds) plus the SonarQube Quality Gate, both required before merge. Merge to
+`main` → per-service pipeline: **test → build → deploy → verify**. Each stage
+only runs if the one before passed. Verify waits for the rollout and calls the
+health URL, because "the deploy command succeeded" isn't the same as "the app
+works". All six services share one recipe (`_build-deploy.yml`), so a pipeline
+change is made once, not six times.
 
 ### Immutable tags
 > "Why not `latest`?"
@@ -252,13 +256,17 @@ free.
 ### Least privilege
 > "What permissions does your pipeline have?"
 
-`contents: read` by default; `packages: write` only on the publish workflow. Not
-a blanket token. Deploy uses a dedicated SSH key, not your personal one.
+Each job asks only for what it needs (`contents: read`, plus `id-token: write`
+for jobs that log in to Azure). There is **no stored Azure password**: GitHub
+hands Azure a short-lived OIDC token, and Azure checks it against a federated
+credential tied to this repo's `main` branch. Third-party actions are pinned
+to full commit SHAs, so a moved tag can't inject code into a job with cloud
+access.
 
 ### Build caching
-`actions/setup-java` with `cache: maven` keyed on pom hashes. Jib over buildpacks
-because layer caching separates dependencies from application classes — your
-deps layer almost never changes, so pushes are seconds.
+`actions/setup-java` with `cache: maven` reuses downloaded dependencies between
+runs. Each Dockerfile copies the `pom.xml` files before the source code, so the
+dependency layer is rebuilt only when a pom changes.
 
 ### Migrations and rollback
 > "What happens to your DB schema when you roll back?"
@@ -273,7 +281,10 @@ the same release that stops using it.
 ## Security
 
 ### Where auth lives, and where it doesn't
-**Built in:** `control-plane`, week 5
+**Status: planned, not built yet.** Today there are no user accounts: the
+public site is protected only by the daily run cap and by exposing a single
+front door (Caddy). The notes below are the plan and the answer to give once
+it's built.
 
 > "How did you secure communication between your microservices?"
 
@@ -335,6 +346,9 @@ and Zuul are in maintenance mode, superseded by Spring Cloud LoadBalancer,
 Resilience4j and Spring Cloud Gateway.
 
 ### Why KEDA on only one service
+**Status: planned, not built yet.** Today `agent-service` runs a fixed single
+copy, and only `retrieval-service` has an autoscaler (CPU-based, 1–2 copies).
+
 `agent-service` is genuinely bursty — idle, then N researchers, then idle — and
 scales on Kafka consumer lag. `retrieval-service` and `control-plane` get fixed
 replicas because their load is steady. Autoscaling everything is cargo culting;
