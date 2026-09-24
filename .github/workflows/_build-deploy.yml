@@ -1,10 +1,25 @@
-# Shared recipe called by each per-service workflow: build and push one image (optional),
-# then apply that service's manifests to AKS.
+# Shared recipe called by each per-service workflow. Four stages, in order:
+#
+#   test   -> run the service's own checks. Runs on pull requests too.
+#   build  -> build and push one image (skipped for public images like searxng).
+#   deploy -> apply that service's manifests to AKS.
+#   verify -> wait for the rollout, then call the service's health endpoint.
+#
+# On a pull request only `test` runs; nothing is built or deployed until the
+# change lands on main. A failed stage stops every stage after it.
 name: build-and-deploy
 
 on:
   workflow_call:
     inputs:
+      test-setup:
+        description: Toolchain the test stage needs - java, python, or none.
+        type: string
+        default: none
+      test-command:
+        description: Shell run by the test stage. Leave empty to skip the stage.
+        type: string
+        default: ''
       image:
         description: Image name in ACR. Leave empty for a public image that needs no build.
         type: string
@@ -23,6 +38,18 @@ on:
         description: Shell run against the cluster before the manifests are applied.
         type: string
         default: ''
+      deployment:
+        description: Deployment the verify stage checks. Leave empty to skip the stage.
+        type: string
+        default: ''
+      health-port:
+        description: Container port the verify stage calls.
+        type: string
+        default: ''
+      health-path:
+        description: HTTP path that returns 200 when the service is healthy.
+        type: string
+        default: ''
 
 env:
   REGISTRY: researchplatformacr
@@ -31,8 +58,38 @@ env:
   NAMESPACE: namespace-workflow-1790106905740
 
 jobs:
+  test:
+    if: inputs.test-command != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: inputs.test-setup == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - if: inputs.test-setup == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run tests
+        run: ${{ inputs.test-command }}
+
   build:
-    if: inputs.image != ''
+    needs: test
+    # Only on main, only when there is an image to build, and only if the tests
+    # passed (or there were none to run).
+    if: >-
+      !cancelled()
+      && github.event_name != 'pull_request'
+      && inputs.image != ''
+      && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -40,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/login@v2.2.0
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -56,9 +113,14 @@ jobs:
           docker push $IMAGE
 
   deploy:
-    needs: build
-    # Run after a successful build, or straight away when there was nothing to build.
-    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    needs: [test, build]
+    # "skipped" is fine for both: no tests configured, or a public image with nothing
+    # to build. "failure" in either one stops the deploy.
+    if: >-
+      !cancelled()
+      && github.event_name != 'pull_request'
+      && (needs.test.result == 'success' || needs.test.result == 'skipped')
+      && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -67,17 +129,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/login@v2.2.0
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: azure/use-kubelogin@v1
+      - uses: azure/use-kubelogin@76597ae0fcbaace21b05e13a2cbf8daee2c6e820 # v1.2
         with:
           kubelogin-version: 'v0.0.25'
 
-      - uses: azure/aks-set-context@v4
+      - uses: azure/aks-set-context@c7eb093e5a5d47caa333f64974d5fd1cd4bf069d # v4.0.3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
@@ -91,7 +153,7 @@ jobs:
         if: inputs.pre-deploy != ''
         run: ${{ inputs.pre-deploy }}
 
-      - uses: Azure/k8s-deploy@v5
+      - uses: Azure/k8s-deploy@c8cfec839dc09896b3b8cc40cd13d04792680771 # v5.1.0
         with:
           action: deploy
           namespace: ${{ env.NAMESPACE }}
@@ -99,3 +161,64 @@ jobs:
           images: ${{ inputs.image != '' && format('{0}.azurecr.io/{1}:{2}', env.REGISTRY, inputs.image, github.sha) || '' }}
           resource-group: ${{ env.RESOURCE_GROUP }}
           name: ${{ env.CLUSTER_NAME }}
+
+  verify:
+    needs: deploy
+    if: >-
+      !cancelled()
+      && inputs.deployment != ''
+      && needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DEPLOYMENT: ${{ inputs.deployment }}
+      HEALTH_PORT: ${{ inputs.health-port }}
+      HEALTH_PATH: ${{ inputs.health-path }}
+    steps:
+      - uses: azure/login@a65d910e8af852a8061c627c456678983e180302 # v2.2.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: azure/use-kubelogin@76597ae0fcbaace21b05e13a2cbf8daee2c6e820 # v1.2
+        with:
+          kubelogin-version: 'v0.0.25'
+
+      - uses: azure/aks-set-context@c7eb093e5a5d47caa333f64974d5fd1cd4bf069d # v4.0.3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          admin: 'false'
+          use-kubelogin: 'true'
+
+      # The JVM services need up to ~3 minutes on first boot (agent-service downloads
+      # its embedding model), so allow 5.
+      - name: Wait for the rollout
+        run: kubectl rollout status deployment/$DEPLOYMENT -n $NAMESPACE --timeout=5m
+
+      # The services have no public address, so tunnel to one pod from this runner
+      # and call its health endpoint. Retries for up to a minute while it warms up.
+      - name: Call the health endpoint
+        if: inputs.health-path != ''
+        run: |
+          kubectl port-forward deployment/$DEPLOYMENT 18080:$HEALTH_PORT -n $NAMESPACE > port-forward.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://localhost:18080$HEALTH_PATH"; then
+              echo
+              echo "$DEPLOYMENT is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "$DEPLOYMENT did not answer $HEALTH_PATH with a 200"
+          cat port-forward.log
+          exit 1
+
+      - name: Show pod state and recent logs
+        if: failure()
+        run: |
+          kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=$DEPLOYMENT -o wide || true
+          kubectl logs deployment/$DEPLOYMENT -n $NAMESPACE --tail=100 || true

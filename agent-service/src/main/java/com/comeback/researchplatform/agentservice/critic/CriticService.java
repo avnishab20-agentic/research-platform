@@ -15,18 +15,25 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * PLAN's Critic loop -- CLAUDE.md: "the Critic re-fetches sources and
@@ -57,7 +64,6 @@ public class CriticService {
     private final CriticProperties props;
     private final RunUsageGuard runUsageGuard;
     private final FixtureIO fixtureIO;
-    private final boolean recordMode;
     private final ClaimCorrector claimCorrector;
     private final RunActivityLog activity;
     private final GuardrailProperties guardrails;
@@ -66,7 +72,6 @@ public class CriticService {
     public CriticService(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                           PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
                           RunUsageGuard runUsageGuard, FixtureIO fixtureIO,
-                          @Value("${fixtures.record-mode:false}") boolean recordMode,
                           ClaimCorrector claimCorrector, RunActivityLog activity,
                           GuardrailProperties guardrails, ConclusionWriter conclusionWriter) {
         this.conclusionWriter = conclusionWriter;
@@ -80,16 +85,6 @@ public class CriticService {
         this.props = props;
         this.runUsageGuard = runUsageGuard;
         this.fixtureIO = fixtureIO;
-        this.recordMode = recordMode;
-    }
-
-    // Same pattern as ResearcherService.recordChat -- replay is already handled
-    // globally by FixtureChatModel, this only covers the record-mode write side.
-    private void recordChat(String promptText, ChatResponse response) {
-        if (recordMode) {
-            fixtureIO.record("chat-responses.json", FixtureIO.keyFor(promptText),
-                    response.getResult().getOutput().getText());
-        }
     }
 
     @Transactional
@@ -103,11 +98,17 @@ public class CriticService {
             return;
         }
 
-        List<ClaimRow> verifiable = claims.stream()
-                .filter(c -> ClaimKind.valueOf(c.kind()) != ClaimKind.INFERENCE)
-                .toList();
-        say(runId, "Re-opening " + claims.stream().map(ClaimRow::sourceUrl).distinct().count()
-                + " sources to check " + verifiable.size() + " statements");
+        // INFERENCE claims are the writer's own reasoning, not something a source
+        // states, so there is nothing to check them against.
+        List<ClaimRow> verifiable = new ArrayList<>();
+        Set<String> sourceUrls = new HashSet<>();
+        for (ClaimRow claim : claims) {
+            sourceUrls.add(claim.sourceUrl());
+            if (ClaimKind.valueOf(claim.kind()) != ClaimKind.INFERENCE) {
+                verifiable.add(claim);
+            }
+        }
+        say(runId, "Re-opening " + sourceUrls.size() + " sources to check " + verifiable.size() + " statements");
         refetchSources(runId, claims);
 
         // Concurrent: gradeAll fills these from several threads at once.
@@ -121,17 +122,20 @@ public class CriticService {
         // not only when the ratio is already over threshold -- one wrong
         // sentence left standing is still a wrong sentence on the page.
         Map<UUID, ClaimRow> current = new LinkedHashMap<>();
-        verifiable.forEach(c -> current.put(c.id(), c));
+        for (ClaimRow claim : verifiable) {
+            current.put(claim.id(), claim);
+        }
         Set<UUID> removed = new HashSet<>();
         int revisedCount = 0;
         if (guardrails.run().maxCriticRounds() > 1) {
-            List<ClaimRow> failed = verifiable.stream()
-                    .filter(c -> isFailure(verdicts.get(c.id())))
-                    .limit(props.maxCorrections())
-                    .toList();
+            List<ClaimRow> failed = new ArrayList<>();
+            for (ClaimRow claim : verifiable) {
+                if (isFailure(verdicts.get(claim.id())) && failed.size() < props.maxCorrections()) {
+                    failed.add(claim);
+                }
+            }
             if (!failed.isEmpty()) {
-                say(runId, failed.size() + (failed.size() == 1 ? " statement" : " statements")
-                        + " didn't hold up. Going back to the web to fix "
+                say(runId, statements(failed.size()) + " didn't hold up. Going back to the web to fix "
                         + (failed.size() == 1 ? "it" : "them"));
             }
             List<ClaimRow> revised = new ArrayList<>();
@@ -168,24 +172,31 @@ public class CriticService {
         // Ratio over what the reader actually sees: removed claims are gone
         // from the answer, so they no longer count against it. They stay in
         // the report (as "removed") so the removal itself is visible.
-        List<Verdict> published = current.keySet().stream()
-                .filter(id -> !removed.contains(id))
-                .map(id -> verdicts.getOrDefault(id, Verdict.UNREACHABLE))
-                .toList();
+        List<Verdict> published = new ArrayList<>();
+        List<ClaimRow> passed = new ArrayList<>();
+        for (ClaimRow claim : current.values()) {
+            if (removed.contains(claim.id())) {
+                continue;
+            }
+            Verdict verdict = verdicts.getOrDefault(claim.id(), Verdict.UNREACHABLE);
+            published.add(verdict);
+            if (verdict == Verdict.SUPPORTED || verdict == Verdict.PARTIAL) {
+                passed.add(claim);
+            }
+        }
         double ratio = unsupportedRatio(published);
         // Before the status flips, so the UI finds the conclusion when it loads the report.
-        conclusionWriter.write(runId, current.values().stream()
-                .filter(c -> !removed.contains(c.id()))
-                .filter(c -> {
-                    Verdict v = verdicts.getOrDefault(c.id(), Verdict.UNREACHABLE);
-                    return v == Verdict.SUPPORTED || v == Verdict.PARTIAL;
-                })
-                .toList());
+        conclusionWriter.write(runId, passed);
         // Above threshold still publishes, banner-marked, per CLAUDE.md's "a
         // failed run is published, never silently dropped".
         String status = ratio > props.unsupportedRatioThreshold() ? "UNVERIFIED" : "VERIFIED";
         jdbc.update("UPDATE runs SET status = ?, updated_at = now() WHERE id = ?", status, runId);
-        long confirmed = published.stream().filter(v -> v == Verdict.SUPPORTED).count();
+        int confirmed = 0;
+        for (Verdict verdict : published) {
+            if (verdict == Verdict.SUPPORTED) {
+                confirmed++;
+            }
+        }
         say(runId, "Done: " + confirmed + " of " + published.size() + " statements in the answer are confirmed"
                 + (revisedCount > 0 ? ", " + revisedCount + " rewritten" : "")
                 + (removed.isEmpty() ? "" : ", " + removed.size() + " removed"));
@@ -199,14 +210,30 @@ public class CriticService {
 
     // Package-visible so CriticServiceTest can pin the wording's arithmetic.
     static String tally(List<ClaimRow> claims, Map<UUID, Verdict> verdicts) {
-        Map<Verdict, Long> counts = claims.stream().collect(Collectors.groupingBy(
-                c -> verdicts.getOrDefault(c.id(), Verdict.UNREACHABLE), () -> new EnumMap<>(Verdict.class),
-                Collectors.counting()));
-        long failed = counts.getOrDefault(Verdict.UNSUPPORTED, 0L) + counts.getOrDefault(Verdict.CONTRADICTED, 0L);
-        return counts.getOrDefault(Verdict.SUPPORTED, 0L) + " confirmed, "
-                + counts.getOrDefault(Verdict.PARTIAL, 0L) + " partly confirmed, "
-                + failed + " failed, "
-                + counts.getOrDefault(Verdict.UNREACHABLE, 0L) + " couldn't be checked";
+        int confirmed = 0;
+        int partlyConfirmed = 0;
+        int failed = 0;
+        int unchecked = 0;
+        for (ClaimRow claim : claims) {
+            // A claim with no verdict was never graded, so it counts as "couldn't be checked".
+            Verdict verdict = verdicts.getOrDefault(claim.id(), Verdict.UNREACHABLE);
+            if (verdict == Verdict.SUPPORTED) {
+                confirmed++;
+            } else if (verdict == Verdict.PARTIAL) {
+                partlyConfirmed++;
+            } else if (isFailure(verdict)) {
+                failed++;
+            } else {
+                unchecked++;
+            }
+        }
+        return confirmed + " confirmed, " + partlyConfirmed + " partly confirmed, "
+                + failed + " failed, " + unchecked + " couldn't be checked";
+    }
+
+    /** "1 statement", "3 statements". */
+    private static String statements(int count) {
+        return count + (count == 1 ? " statement" : " statements");
     }
 
     private void say(UUID runId, String message) {
@@ -226,7 +253,11 @@ public class CriticService {
     /** The actual "re-fetch" -- independently confirms each source is still
      *  reachable and still says what the Writer's claims assumed it said. */
     private void refetchSources(UUID runId, List<ClaimRow> claims) {
-        List<String> urls = claims.stream().map(ClaimRow::sourceUrl).distinct().toList();
+        Set<String> uniqueUrls = new LinkedHashSet<>();
+        for (ClaimRow claim : claims) {
+            uniqueUrls.add(claim.sourceUrl());
+        }
+        List<String> urls = new ArrayList<>(uniqueUrls);
         if (urls.isEmpty()) {
             return;
         }
@@ -311,7 +342,7 @@ public class CriticService {
                     .user(user)
                     .call()
                     .responseEntity(new ParameterizedTypeReference<List<ClaimGrade>>() {});
-            recordChat(system + "\n---\n" + user, result.response());
+            fixtureIO.recordChat(system + "\n---\n" + user, result.response());
             List<ClaimGrade> grades = result.entity();
             if (grades != null) {
                 for (ClaimGrade grade : grades) {
@@ -339,7 +370,12 @@ public class CriticService {
         if (verdicts.isEmpty()) {
             return 0.0;
         }
-        long bad = verdicts.stream().filter(v -> v == Verdict.UNSUPPORTED || v == Verdict.CONTRADICTED).count();
+        int bad = 0;
+        for (Verdict verdict : verdicts) {
+            if (isFailure(verdict)) {
+                bad++;
+            }
+        }
         return (double) bad / verdicts.size();
     }
 }

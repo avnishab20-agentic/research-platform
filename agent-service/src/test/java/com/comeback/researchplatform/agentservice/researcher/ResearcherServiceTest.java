@@ -28,7 +28,7 @@ class ResearcherServiceTest {
     private final ResearcherService service = new ResearcherService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
             new ResearcherProperties(Duration.ofSeconds(90), 25000, 5, 5, 6),
-            mock(FixtureIO.class), false, mock(RunUsageGuard.class),
+            mock(FixtureIO.class), mock(RunUsageGuard.class),
             mock(com.comeback.researchplatform.agentservice.activity.RunActivityLog.class));
 
     @Test

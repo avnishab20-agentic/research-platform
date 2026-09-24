@@ -21,8 +21,11 @@ import java.util.regex.Pattern;
 public final class ClaimCorruptor {
 
     private static final Pattern NUMBER = Pattern.compile("([$€£]?\\s?[0-9][0-9,]*(?:\\.[0-9]+)?\\s?%?)");
+    // A run of capitalised words, e.g. "Reserve Bank". The "+" after each
+    // quantifier (*+, ++) means "never give characters back", which stops the
+    // regex engine trying exponentially many ways to split a long run of words.
     private static final Pattern PROPER_NOUN =
-            Pattern.compile("\\b[A-Z][a-zA-Z]*(?:\\s+[A-Z][a-zA-Z]*)*\\b");
+            Pattern.compile("\\b[A-Z][a-zA-Z]*+(?:\\s++[A-Z][a-zA-Z]*+)*+\\b");
 
     // Ordered so the longer/more specific phrase in a pair is tried first
     // (e.g. "grew by" before "grew") -- Map iteration order matters here.

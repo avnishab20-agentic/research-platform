@@ -18,6 +18,15 @@
     <properties>
         <java.version>21</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
+
+        <!-- SonarQube Cloud project. These are the names SonarQube Cloud gives a GitHub
+             import by default; if its project page shows different ones, change them here. -->
+        <sonar.organization>avnishab20-agentic</sonar.organization>
+        <sonar.projectKey>avnishab20-agentic_research-platform</sonar.projectKey>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <!-- Third-party minified JS (React, htm) copied in so the page needs no CDN.
+             Not our code, so not something Sonar should grade. -->
+        <sonar.exclusions>**/static/vendor/**</sonar.exclusions>
     </properties>
 
     <dependencyManagement>
@@ -48,8 +57,42 @@
                         </execution>
                     </executions>
                 </plugin>
+                <!-- Pinned here so `mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar`
+                     in CI always uses this version. Only CI runs it. -->
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>5.8.0.7211</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+
+        <plugins>
+            <!-- Test coverage. prepare-agent watches which lines the tests run;
+                 report turns that into target/site/jacoco/jacoco.xml (read by
+                 SonarQube Cloud) and index.html (open it in a browser).
+                 Declared here, not per module, so every module gets it. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.15</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 
 </project>

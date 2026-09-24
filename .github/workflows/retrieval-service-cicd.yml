@@ -9,9 +9,18 @@ on:
       - pom.xml
       - .github/workflows/retrieval-service-cicd.yml
       - .github/workflows/_build-deploy.yml
+  # Pull requests run the test stage only; build, deploy and verify wait for main.
+  pull_request:
+    paths:
+      - retrieval-service/**
+      - common/**
+      - pom.xml
+      - .github/workflows/retrieval-service-cicd.yml
+      - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
-concurrency: ${{ github.workflow }}
+# One run at a time per branch, so two deploys to the cluster never overlap.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   actions: read
@@ -19,10 +28,15 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  pipeline:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
+      test-setup: java
+      test-command: mvn -B -pl retrieval-service -am test
       image: retrieval-service
       dockerfile: ./retrieval-service/Dockerfile
       manifests: ./retrieval-service/k8s/manifests
+      deployment: retrieval-service-cicd
+      health-port: '8081'
+      health-path: /actuator/health

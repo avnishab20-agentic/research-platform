@@ -7,9 +7,16 @@ on:
       - searxng/**
       - .github/workflows/searxng.yml
       - .github/workflows/_build-deploy.yml
+  # Pull requests run the test stage only; deploy and verify wait for main.
+  pull_request:
+    paths:
+      - searxng/**
+      - .github/workflows/searxng.yml
+      - .github/workflows/_build-deploy.yml
   workflow_dispatch:
 
-concurrency: ${{ github.workflow }}
+# One run at a time per branch, so two deploys to the cluster never overlap.
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   actions: read
@@ -17,13 +24,19 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  pipeline:
     uses: ./.github/workflows/_build-deploy.yml
     secrets: inherit
     with:
+      # SearXNG only answers in HTML unless "json" is listed in search.formats, and then
+      # every search call from retrieval-service fails confusingly. Catch that here.
+      test-command: yq -e '.search.formats[] | select(. == "json")' searxng/settings.yml
       # Public image, nothing to build. settings.yml is loaded from the repo file,
       # and the restart makes a changed file take effect (it fails harmlessly on first deploy).
       manifests: ./searxng/k8s
       pre-deploy: |
         kubectl create configmap searxng-settings --from-file=settings.yml=./searxng/settings.yml -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
         kubectl rollout restart deployment/searxng -n $NAMESPACE || true
+      deployment: searxng
+      health-port: '8080'
+      health-path: /healthz

@@ -26,7 +26,7 @@ class CriticServiceTest {
     private final CriticService service = new CriticService(
             mock(ChatClient.Builder.class), mock(RetrievalClient.class), mock(PassageStore.class),
             mock(JdbcTemplate.class), new CriticProperties(10, 3, 0.15, 6, 2), mock(RunUsageGuard.class),
-            mock(FixtureIO.class), false, mock(ClaimCorrector.class),
+            mock(FixtureIO.class), mock(ClaimCorrector.class),
             mock(com.comeback.researchplatform.agentservice.activity.RunActivityLog.class), null,
             mock(ConclusionWriter.class));
 

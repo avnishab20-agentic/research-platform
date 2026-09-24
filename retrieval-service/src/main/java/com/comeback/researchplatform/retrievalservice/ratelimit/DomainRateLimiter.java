@@ -8,6 +8,8 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Component
@@ -49,8 +51,8 @@ public class DomainRateLimiter {
     private static String readScript() {
         try {
             return new ClassPathResource("scripts/token_bucket.lua")
-                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-        } catch (java.io.IOException e) {
+                    .getContentAsString(StandardCharsets.UTF_8);
+        } catch (IOException e) {
             // The script is packaged in our own jar. If it's missing the build is broken,
             // and starting up to fail one request at a time would only hide that.
             throw new IllegalStateException("token_bucket.lua missing from classpath", e);

@@ -7,6 +7,7 @@ import com.comeback.researchplatform.agentservice.retrieval.dto.SearchResponse;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -34,9 +35,10 @@ public class FixtureRetrievalClient implements RetrievalClient {
 
     @Override
     public ExtractResponse extract(List<String> urls) {
-        List<ExtractedDocument> documents = urls.stream()
-                .map(url -> fixtureIO.read("extract-responses.json", FixtureIO.keyFor(url), ExtractedDocument.class))
-                .toList();
+        List<ExtractedDocument> documents = new ArrayList<>();
+        for (String url : urls) {
+            documents.add(fixtureIO.read("extract-responses.json", FixtureIO.keyFor(url), ExtractedDocument.class));
+        }
         return new ExtractResponse(documents);
     }
 }

@@ -3,6 +3,7 @@ package com.comeback.researchplatform.retrievalservice.search;
 import com.comeback.researchplatform.retrievalservice.config.SourceTierProperties;
 import com.comeback.researchplatform.retrievalservice.dto.SearchRequest;
 import com.comeback.researchplatform.retrievalservice.dto.SearchResponse;
+import com.comeback.researchplatform.retrievalservice.quota.QuotaExceededException;
 import com.comeback.researchplatform.retrievalservice.quota.QuotaService;
 import com.comeback.researchplatform.retrievalservice.tier.SourceTierResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,9 +21,12 @@ import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,6 +44,7 @@ class SearchServiceTest {
     private static final String BASE_URL = "http://searxng.test";
 
     private MockRestServiceServer server;
+    private StringRedisTemplate redis;
     private ValueOperations<String, String> valueOps;
     private QuotaService quotaService;
     private ObjectMapper objectMapper;
@@ -51,7 +56,7 @@ class SearchServiceTest {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         server = MockRestServiceServer.bindTo(builder).build();
 
-        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        redis = mock(StringRedisTemplate.class);
         valueOps = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(valueOps);
 
@@ -102,6 +107,20 @@ class SearchServiceTest {
 
         verify(valueOps).set(anyString(), anyString(), eq(Duration.ofHours(24)));
         verify(quotaService).recordSpend();
+    }
+
+    @Test
+    void aQuotaBreachStillReleasesTheLock() {
+        // The budget check runs while this caller holds the single-flight lock. If the
+        // breach skipped the release, every other caller would wait out the 30s lock TTL.
+        when(valueOps.get(anyString())).thenReturn(null);
+        doThrow(new QuotaExceededException(1000)).when(quotaService).checkBudget();
+
+        assertThatThrownBy(() -> searchService.search(request("rbi", 10, 4, null)))
+                .isInstanceOf(QuotaExceededException.class);
+
+        verify(redis).delete(startsWith("lock:"));
+        server.verify();
     }
 
     @Test

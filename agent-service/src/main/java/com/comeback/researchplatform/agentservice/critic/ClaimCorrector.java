@@ -7,6 +7,7 @@ import com.comeback.researchplatform.agentservice.rag.PassageStore;
 import com.comeback.researchplatform.agentservice.retrieval.RetrievalClient;
 import com.comeback.researchplatform.agentservice.retrieval.dto.ExtractedDocument;
 import com.comeback.researchplatform.agentservice.retrieval.dto.SearchResult;
+import com.comeback.researchplatform.agentservice.util.UrlHost;
 import com.comeback.researchplatform.common.Verdict;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,13 +15,17 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * PLAN's re-research round: "re-research the failed claims ONLY (not a full
@@ -56,12 +61,10 @@ public class ClaimCorrector {
     private final RunUsageGuard runUsageGuard;
     private final RunActivityLog activity;
     private final FixtureIO fixtureIO;
-    private final boolean recordMode;
 
     public ClaimCorrector(ChatClient.Builder chatClientBuilder, RetrievalClient retrievalClient,
                           PassageStore passageStore, JdbcTemplate jdbc, CriticProperties props,
-                          RunUsageGuard runUsageGuard, RunActivityLog activity, FixtureIO fixtureIO,
-                          @Value("${fixtures.record-mode:false}") boolean recordMode) {
+                          RunUsageGuard runUsageGuard, RunActivityLog activity, FixtureIO fixtureIO) {
         this.chatClient = chatClientBuilder.build();
         this.retrievalClient = retrievalClient;
         this.passageStore = passageStore;
@@ -70,7 +73,6 @@ public class ClaimCorrector {
         this.runUsageGuard = runUsageGuard;
         this.activity = activity;
         this.fixtureIO = fixtureIO;
-        this.recordMode = recordMode;
     }
 
     public Outcome correct(UUID runId, ClaimRow claim, Verdict firstVerdict) {
@@ -80,10 +82,14 @@ public class ClaimCorrector {
         // Only passages whose source tier is known can become a claim's
         // source -- sources.tier is NOT NULL, and guessing a tier would put a
         // made-up trust grade on the page.
-        List<Document> passages = passageStore.retrieveTopK(runId, claim.text(), props.topKPassages() * 2)
-                .stream()
-                .filter(p -> tierByUrl.containsKey(urlOf(p)))
-                .toList();
+        List<Document> passages = new ArrayList<>();
+        Set<String> offered = new HashSet<>();
+        for (Document passage : passageStore.retrieveTopK(runId, claim.text(), props.topKPassages() * 2)) {
+            if (tierByUrl.containsKey(urlOf(passage))) {
+                passages.add(passage);
+                offered.add(urlOf(passage));
+            }
+        }
         if (passages.isEmpty()) {
             return remove(runId, claim, "no source it read says anything about this");
         }
@@ -97,7 +103,6 @@ public class ClaimCorrector {
             return remove(runId, claim, "none of the sources back it up");
         }
 
-        Set<String> offered = passages.stream().map(ClaimCorrector::urlOf).collect(Collectors.toSet());
         if (revision.text() == null || revision.text().isBlank() || !offered.contains(revision.sourceUrl())) {
             // A rewrite pointing at a URL it was never shown is exactly the
             // fabrication this project exists to catch -- don't accept it.
@@ -111,7 +116,7 @@ public class ClaimCorrector {
                 UUID.class, runId, revision.sourceUrl(), tierByUrl.get(revision.sourceUrl()));
         jdbc.update("UPDATE claims SET original_text = text, text = ?, source_id = ?, correction = 'REVISED' "
                 + "WHERE id = ?", revision.text(), sourceId, claim.id());
-        say(runId, "Rewrote it as “" + revision.text() + "”, based on " + host(revision.sourceUrl()));
+        say(runId, "Rewrote it as “" + revision.text() + "”, based on " + UrlHost.of(revision.sourceUrl()));
         return new Outcome(Kind.REVISED,
                 new ClaimRow(claim.id(), revision.text(), claim.kind(), sourceId, revision.sourceUrl()));
     }
@@ -132,23 +137,26 @@ public class ClaimCorrector {
             return;
         }
         try {
-            List<String> urls = retrievalClient.search(List.of(claim.text()), NEW_PAGES_PER_CLAIM * 2, null, 4)
-                    .results().stream()
-                    .map(SearchResult::url)
-                    .filter(u -> !tierByUrl.containsKey(u))
-                    .distinct()
-                    .limit(NEW_PAGES_PER_CLAIM)
-                    .toList();
+            List<SearchResult> results = retrievalClient.search(
+                    List.of(claim.text()), NEW_PAGES_PER_CLAIM * 2, null, 4).results();
+            // Only pages this run hasn't read yet, no duplicates, at most NEW_PAGES_PER_CLAIM.
+            List<String> urls = new ArrayList<>();
+            for (SearchResult result : results) {
+                boolean alreadyKnown = tierByUrl.containsKey(result.url()) || urls.contains(result.url());
+                if (!alreadyKnown && urls.size() < NEW_PAGES_PER_CLAIM) {
+                    urls.add(result.url());
+                }
+            }
             if (urls.isEmpty()) {
                 say(runId, "Searched again but found no new pages");
                 return;
             }
             List<String> read = new ArrayList<>();
             for (ExtractedDocument doc : retrievalClient.extract(urls).documents()) {
-                if ("OK".equals(doc.status()) && doc.text() != null && !doc.text().isBlank()) {
+                if (doc.isUsable()) {
                     passageStore.index(runId, doc.url(), doc.text());
                     tierByUrl.put(doc.url(), doc.tier());
-                    read.add(host(doc.url()));
+                    read.add(UrlHost.of(doc.url()));
                 }
             }
             say(runId, read.isEmpty()
@@ -183,10 +191,7 @@ public class ClaimCorrector {
                     .user(user)
                     .call()
                     .responseEntity(ClaimRevision.class);
-            if (recordMode) {
-                fixtureIO.record("chat-responses.json", FixtureIO.keyFor(system + "\n---\n" + user),
-                        result.response().getResult().getOutput().getText());
-            }
+            fixtureIO.recordChat(system + "\n---\n" + user, result.response());
             return result.entity();
         } catch (Exception e) {
             log.warn("Claim revision failed for claim {} in run {}", claim.id(), runId, e);
@@ -206,14 +211,5 @@ public class ClaimCorrector {
 
     private static String urlOf(Document passage) {
         return (String) passage.getMetadata().get("sourceUrl");
-    }
-
-    static String host(String url) {
-        try {
-            String h = java.net.URI.create(url).getHost();
-            return h == null ? url : h.replaceFirst("^www\\.", "");
-        } catch (IllegalArgumentException e) {
-            return url;
-        }
     }
 }
