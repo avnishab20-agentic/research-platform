@@ -11,7 +11,7 @@ No secret values are stored in this repo. Each one lives in a store that only th
 | `SEARXNG_SECRET` | searxng | `.env` (compose has a local-only fallback) | not needed | `app-secrets` Secret, key `SEARXNG_SECRET` |
 | Postgres password (`SPRING_DATASOURCE_PASSWORD`) | control-plane, agent-service | not needed: falls back to `research`, the local container's password | not needed | `app-secrets` Secret |
 | Redis access key | retrieval-service | none (local Redis has no password) | not needed | `secret-ref` Secret |
-| `EVENTHUBS_CONNECTION_STRING` | agent-service, control-plane | not needed (Redpanda) | not needed | `app-secrets` Secret |
+| `EVENTHUBS_CONNECTION_STRING` | agent-service, control-plane, KEDA (to read consumer lag) | not needed (Redpanda) | not needed | `app-secrets` Secret |
 | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | deploy workflows | not needed | repo Secrets | not needed |
 | `SONAR_TOKEN` | `backend-pr-validation` (SonarQube Cloud scan) | not needed | repo Secret (the scan skips itself without it) | not needed |
 
