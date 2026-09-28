@@ -150,10 +150,10 @@ public class ResearcherService {
         String finalAnswer;
         if (answer == null) {
             finalAnswer = "Unable to synthesize an answer within budget.";
-            say(subtask, "Couldn't find an answer in what it read");
+            say(subtask, "Ran out of time or budget before writing an answer");
         } else if (unanswerable) {
             finalAnswer = "The retrieved passages did not contain an answer to this question.";
-            say(subtask, "Couldn't find an answer in what it read");
+            say(subtask, "None of the pages it read were about this question");
         } else {
             finalAnswer = answer;
             say(subtask, "Wrote an answer from the " + passages.size() + " most relevant passages across "
@@ -250,9 +250,14 @@ public class ResearcherService {
             labelledPassages.add("Source: " + passage.getMetadata().get("sourceUrl") + "\n" + passage.getText());
         }
         String context = String.join("\n\n---\n\n", labelledPassages);
+        // Partial answers are wanted: an all-or-nothing rule made the model give up on
+        // any opinion-style question, and a run where every researcher gives up has
+        // nothing to fact-check. The Critic still checks every sentence this produces.
         String system = "Answer the research question using only the provided passages. "
-                + "Do not use outside knowledge. If the passages don't answer the "
-                + "question, reply with exactly this and nothing else: " + UNANSWERABLE;
+                + "Do not use outside knowledge. If the passages answer only part of the "
+                + "question, answer that part and say plainly what they don't cover. "
+                + "Only if no passage is relevant to the question at all, reply with exactly "
+                + "this and nothing else: " + UNANSWERABLE;
         String user = "Question: " + subQuestion + "\n\nPassages:\n" + context;
         try {
             ChatResponse response = chatClient.prompt()

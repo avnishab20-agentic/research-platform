@@ -21,6 +21,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -76,9 +78,15 @@ class CriticServiceVerifyTest {
         when(passages.retrieveTopK(eq(runId), anyString(), anyInt())).thenReturn(List.of(passage));
         when(passages.retrieveTopK(eq(runId), eq(noEvidence.text()), anyInt())).thenReturn(List.of());
 
-        when(corrector.correct(runId, contradicted, Verdict.CONTRADICTED))
+        ClaimCorrector.Decision revise = new ClaimCorrector.Decision(
+                ClaimCorrector.Kind.REVISED, rewritten.text(), RBI, 1, null);
+        ClaimCorrector.Decision remove = new ClaimCorrector.Decision(
+                ClaimCorrector.Kind.REMOVED, null, null, null, "no source backs it");
+        when(corrector.decide(runId, contradicted, Verdict.CONTRADICTED)).thenReturn(revise);
+        when(corrector.decide(runId, unsupported, Verdict.UNSUPPORTED)).thenReturn(remove);
+        when(corrector.apply(runId, contradicted, revise))
                 .thenReturn(new ClaimCorrector.Outcome(ClaimCorrector.Kind.REVISED, rewritten));
-        when(corrector.correct(runId, unsupported, Verdict.UNSUPPORTED))
+        when(corrector.apply(runId, unsupported, remove))
                 .thenReturn(new ClaimCorrector.Outcome(ClaimCorrector.Kind.REMOVED, unsupported));
     }
 
@@ -135,9 +143,56 @@ class CriticServiceVerifyTest {
 
         service(grader(), 1).verify(runId);
 
-        verify(corrector, never()).correct(any(), any(), any());
+        verify(corrector, never()).decide(any(), any(), any());
         // 2 of 3 failed, well over the 15% threshold -- published, but flagged.
         verify(jdbc).update(startsWith("UPDATE runs SET status = ?"), eq("UNVERIFIED"), eq(runId));
+    }
+
+    @Test
+    void failedClaimsAreFixedAtTheSameTime() {
+        when(corrector.apply(any(), any(), any())).thenAnswer(call ->
+                new ClaimCorrector.Outcome(ClaimCorrector.Kind.UNCHANGED, call.getArgument(1)));
+        // Both fixes wait for each other. One after another, the first would time out
+        // waiting for a second that hasn't started, and neither claim would be applied.
+        CyclicBarrier bothRunning = new CyclicBarrier(2);
+        ClaimCorrector.Decision revise = new ClaimCorrector.Decision(
+                ClaimCorrector.Kind.REVISED, rewritten.text(), RBI, 1, null);
+        when(corrector.decide(any(), any(), any())).thenAnswer(call -> {
+            bothRunning.await(5, TimeUnit.SECONDS);
+            return revise;
+        });
+        storedClaims(List.of(confirmed, contradicted, unsupported));
+
+        service(grader(), 2).verify(runId);
+
+        verify(corrector).apply(runId, contradicted, revise);
+        verify(corrector).apply(runId, unsupported, revise);
+    }
+
+    @Test
+    void aFixThatCrashesLeavesItsClaimUnchanged() {
+        when(corrector.apply(any(), any(), any())).thenAnswer(call ->
+                new ClaimCorrector.Outcome(ClaimCorrector.Kind.UNCHANGED, call.getArgument(1)));
+        when(corrector.decide(runId, unsupported, Verdict.UNSUPPORTED))
+                .thenThrow(new IllegalStateException("search down"));
+        storedClaims(List.of(confirmed, contradicted, unsupported));
+
+        service(grader(), 2).verify(runId);
+
+        verify(corrector).apply(runId, unsupported, ClaimCorrector.Decision.unchanged());
+    }
+
+    @Test
+    void whenNothingPassesTheAnswerIsInconclusive() {
+        storedClaims(List.of(contradicted, unsupported));
+        ScriptedChatModel bothFail = new ScriptedChatModel().reply("You are a fact-checker", """
+                [{"index": 1, "verdict": "CONTRADICTED"}, {"index": 2, "verdict": "UNSUPPORTED"}]
+                """);
+
+        service(bothFail, 1).verify(runId);
+
+        verify(conclusionWriter, never()).write(any(), anyList());
+        verify(conclusionWriter).writeInconclusive(eq(runId), startsWith("The research turned up 2 statements"));
     }
 
     @Test
@@ -148,6 +203,8 @@ class CriticServiceVerifyTest {
 
         verify(jdbc).update(startsWith("UPDATE runs SET status = 'UNVERIFIED'"), eq(runId));
         verify(conclusionWriter, never()).write(any(), anyList());
+        // Still answered: the reader is told it's inconclusive, not shown a blank page.
+        verify(conclusionWriter).writeInconclusive(eq(runId), anyString());
     }
 
     @Test

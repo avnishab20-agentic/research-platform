@@ -34,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * PLAN's Critic loop -- CLAUDE.md: "the Critic re-fetches sources and
@@ -93,6 +94,9 @@ public class CriticService {
         if (claims.isEmpty()) {
             // Nothing was checked, so nothing is verified -- an empty report is a failed
             // run, published as such rather than dressed up as a pass.
+            conclusionWriter.writeInconclusive(runId, "The researchers searched the web for every part of "
+                    + "this question, but none of the pages they read answered it, so there are no checked "
+                    + "facts to give. A narrower, more factual question usually finds sources.");
             jdbc.update("UPDATE runs SET status = 'UNVERIFIED', updated_at = now() WHERE id = ?", runId);
             log.info("Run {} has no claims to verify; marked UNVERIFIED", runId);
             return;
@@ -138,10 +142,11 @@ public class CriticService {
                 say(runId, statements(failed.size()) + " didn't hold up. Going back to the web to fix "
                         + (failed.size() == 1 ? "it" : "them"));
             }
+            List<ClaimCorrector.Decision> decisions = decideAll(runId, failed, verdicts);
             List<ClaimRow> revised = new ArrayList<>();
-            for (ClaimRow claim : failed) {
-                say(runId, "Fixing: “" + claim.text() + "”");
-                ClaimCorrector.Outcome outcome = claimCorrector.correct(runId, claim, verdicts.get(claim.id()));
+            for (int i = 0; i < failed.size(); i++) {
+                ClaimRow claim = failed.get(i);
+                ClaimCorrector.Outcome outcome = claimCorrector.apply(runId, claim, decisions.get(i));
                 switch (outcome.kind()) {
                     case REVISED -> {
                         revised.add(outcome.claim());
@@ -186,7 +191,13 @@ public class CriticService {
         }
         double ratio = unsupportedRatio(published);
         // Before the status flips, so the UI finds the conclusion when it loads the report.
-        conclusionWriter.write(runId, passed);
+        if (passed.isEmpty()) {
+            conclusionWriter.writeInconclusive(runId, "The research turned up " + statements(published.size())
+                    + ", but none held up when checked against the pages they came from, so there are no "
+                    + "confirmed facts to give. The statements are listed below, marked as not confirmed.");
+        } else {
+            conclusionWriter.write(runId, passed);
+        }
         // Above threshold still publishes, banner-marked, per CLAUDE.md's "a
         // failed run is published, never silently dropped".
         String status = ratio > props.unsupportedRatioThreshold() ? "UNVERIFIED" : "VERIFIED";
@@ -294,6 +305,37 @@ public class CriticService {
                 });
             }
         }
+    }
+
+    /**
+     * Each fix is a search, a fetch and a model call, and one claim's
+     * fix doesn't depend on another's, so they run at once instead of back to
+     * back. Only decide() runs on the pool; its writes are applied afterwards on
+     * this thread, inside verify()'s transaction. A fix that dies leaves its
+     * claim UNCHANGED, same as the model failing to decide.
+     */
+    private List<ClaimCorrector.Decision> decideAll(UUID runId, List<ClaimRow> failed,
+                                                    Map<UUID, Verdict> verdicts) {
+        List<Future<ClaimCorrector.Decision>> futures = new ArrayList<>();
+        try (ExecutorService pool = Executors.newFixedThreadPool(props.parallelCalls())) {
+            for (ClaimRow claim : failed) {
+                futures.add(pool.submit(() -> {
+                    say(runId, "Fixing: “" + claim.text() + "”");
+                    return claimCorrector.decide(runId, claim, verdicts.get(claim.id()));
+                }));
+            }
+        }
+        // close() above waited for every task, so each future is finished here.
+        List<ClaimCorrector.Decision> decisions = new ArrayList<>();
+        for (Future<ClaimCorrector.Decision> future : futures) {
+            if (future.state() == Future.State.SUCCESS) {
+                decisions.add(future.resultNow());
+            } else {
+                log.warn("Fixing a claim failed in run {}", runId, future.exceptionNow());
+                decisions.add(ClaimCorrector.Decision.unchanged());
+            }
+        }
+        return decisions;
     }
 
     private void gradeBatch(UUID runId, List<ClaimRow> batch,
