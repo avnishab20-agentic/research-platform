@@ -60,6 +60,7 @@ class CriticServiceVerifyTest {
     private ClaimCorrector corrector;
     private ConclusionWriter conclusionWriter;
     private RunUsageGuard guard;
+    private RetrievalClient retrieval;
 
     private static ClaimRow claim(String text, String kind) {
         return new ClaimRow(UUID.randomUUID(), text, kind, UUID.randomUUID(), RBI);
@@ -73,6 +74,9 @@ class CriticServiceVerifyTest {
         conclusionWriter = mock(ConclusionWriter.class);
         guard = mock(RunUsageGuard.class);
         when(guard.tryLlmCall(runId)).thenReturn(true);
+        retrieval = mock(RetrievalClient.class);
+        when(retrieval.extract(anyList())).thenReturn(new ExtractResponse(List.of(
+                new ExtractedDocument(RBI, "The policy repo rate is 6.5 per cent.", 1, "OK"))));
 
         Document passage = new Document("The policy repo rate is 6.5 per cent.", Map.of("sourceUrl", RBI));
         when(passages.retrieveTopK(eq(runId), anyString(), anyInt())).thenReturn(List.of(passage));
@@ -95,9 +99,6 @@ class CriticServiceVerifyTest {
     }
 
     private CriticService service(ScriptedChatModel chat, int maxCriticRounds) {
-        RetrievalClient retrieval = mock(RetrievalClient.class);
-        when(retrieval.extract(anyList())).thenReturn(new ExtractResponse(List.of(
-                new ExtractedDocument(RBI, "The policy repo rate is 6.5 per cent.", 1, "OK"))));
         GuardrailProperties guardrails = new GuardrailProperties(GuardrailMode.ENFORCE,
                 new GuardrailProperties.Run(Duration.ofMinutes(10), 50, 50, 8, maxCriticRounds, "PARTIAL"),
                 null, null, null);
@@ -116,6 +117,43 @@ class CriticServiceVerifyTest {
                          {"index": 2, "verdict": "CONTRADICTED", "evidencePassage": "6.5 per cent"},
                          {"index": 3, "verdict": "UNSUPPORTED"}]
                         """);
+    }
+
+    @Test
+    void aReOpenedPageIsSavedAsTheSourcesText() {
+        storedClaims(List.of(confirmed));
+
+        service(grader(), 2).verify(runId);
+
+        verify(jdbc).update(startsWith("UPDATE sources SET extracted_text"),
+                eq("The policy repo rate is 6.5 per cent."), eq(runId), eq(RBI));
+    }
+
+    @Test
+    void aPageThatCouldNotBeReOpenedKeepsTheTextAlreadyRead() {
+        // A failed re-fetch says nothing about the page -- blanking the text the
+        // Researcher already read would lose the evidence trail.
+        when(retrieval.extract(anyList())).thenReturn(new ExtractResponse(List.of(
+                new ExtractedDocument(RBI, null, 1, "UNREACHABLE"))));
+        storedClaims(List.of(confirmed));
+
+        service(grader(), 2).verify(runId);
+
+        verify(jdbc, never()).update(startsWith("UPDATE sources"), any(), any(), any());
+        verify(jdbc).update(startsWith("UPDATE runs SET status = ?"), eq("VERIFIED"), eq(runId));
+    }
+
+    @Test
+    void aReFetchThatCrashesDoesNotStopTheCheck() {
+        // Grading reads stored passages, not the re-fetch, so it still reaches a verdict.
+        when(retrieval.extract(anyList())).thenThrow(new IllegalStateException("retrieval-service down"));
+        storedClaims(List.of(confirmed));
+
+        service(grader(), 2).verify(runId);
+
+        verify(jdbc, never()).update(startsWith("UPDATE sources"), any(), any(), any());
+        verify(jdbc).update(startsWith("INSERT INTO claim_verdicts"), eq(confirmed.id()), eq("SUPPORTED"), any());
+        verify(jdbc).update(startsWith("UPDATE runs SET status = ?"), eq("VERIFIED"), eq(runId));
     }
 
     @Test
