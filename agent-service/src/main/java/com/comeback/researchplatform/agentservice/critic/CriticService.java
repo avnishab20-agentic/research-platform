@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -113,12 +114,17 @@ public class CriticService {
             }
         }
         say(runId, "Re-opening " + sourceUrls.size() + " sources to check " + verifiable.size() + " statements");
-        refetchSources(runId, claims);
+        // Grading reads passages from PassageStore, not the re-fetched text, so the
+        // re-fetch runs alongside the first grading pass instead of before it. Only
+        // the network call is off-thread; its writes happen here, in this transaction.
+        CompletableFuture<List<ExtractedDocument>> refetched =
+                CompletableFuture.supplyAsync(() -> refetchSources(runId, claims), r -> Thread.ofVirtual().start(r));
 
         // Concurrent: gradeAll fills these from several threads at once.
         Map<UUID, Verdict> verdicts = new ConcurrentHashMap<>();
         Map<UUID, String> evidenceByClaimId = new ConcurrentHashMap<>();
         gradeAll(runId, verifiable, verdicts, evidenceByClaimId);
+        saveRefetched(runId, refetched.join());
         say(runId, "First check: " + tally(verifiable, verdicts));
 
         // PLAN's round 2: re-research the failed claims only. Deviation from
@@ -263,28 +269,32 @@ public class CriticService {
 
     /** The actual "re-fetch" -- independently confirms each source is still
      *  reachable and still says what the Writer's claims assumed it said. */
-    private void refetchSources(UUID runId, List<ClaimRow> claims) {
+    private List<ExtractedDocument> refetchSources(UUID runId, List<ClaimRow> claims) {
         Set<String> uniqueUrls = new LinkedHashSet<>();
         for (ClaimRow claim : claims) {
             uniqueUrls.add(claim.sourceUrl());
         }
         List<String> urls = new ArrayList<>(uniqueUrls);
         if (urls.isEmpty()) {
-            return;
+            return List.of();
         }
         try {
-            List<ExtractedDocument> documents = retrievalClient.extract(urls).documents();
-            for (ExtractedDocument doc : documents) {
-                if ("OK".equals(doc.status()) && doc.text() != null) {
-                    jdbc.update("UPDATE sources SET extracted_text = ?, fetched_at = now() "
-                            + "WHERE run_id = ? AND url = ?", doc.text(), runId, doc.url());
-                }
-                // Non-OK re-fetches leave the existing extracted_text alone --
-                // a transient failure to re-fetch shouldn't blank out text the
-                // Researcher already successfully read once.
-            }
+            return retrievalClient.extract(urls).documents();
         } catch (Exception e) {
             log.warn("Source re-fetch failed for run {}", runId, e);
+            return List.of();
+        }
+    }
+
+    private void saveRefetched(UUID runId, List<ExtractedDocument> documents) {
+        for (ExtractedDocument doc : documents) {
+            if ("OK".equals(doc.status()) && doc.text() != null) {
+                jdbc.update("UPDATE sources SET extracted_text = ?, fetched_at = now() "
+                        + "WHERE run_id = ? AND url = ?", doc.text(), runId, doc.url());
+            }
+            // Non-OK re-fetches leave the existing extracted_text alone --
+            // a transient failure to re-fetch shouldn't blank out text the
+            // Researcher already successfully read once.
         }
     }
 

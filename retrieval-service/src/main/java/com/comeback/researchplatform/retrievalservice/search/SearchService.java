@@ -19,6 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Runs web searches with a Redis cache in front.
@@ -76,48 +79,31 @@ public class SearchService {
                 .body(SearxngSearchResponse.class);
     }
 
+    /** One query's share of a search: its raw results, and whether it cost a credit. */
+    private record QueryOutcome(List<SearxngResult> results, boolean paid) {}
+
     public SearchResponse search(SearchRequest request) {
+        // Queries are independent upstream calls, so they run at once instead of each
+        // waiting for the one before (a researcher sends 3). Outcomes are still read
+        // back in query order, so the maxResults cut below keeps the same results.
+        List<Future<QueryOutcome>> pending = new ArrayList<>();
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (String query : request.queries()) {
+                pending.add(pool.submit(() -> searchOne(request, query)));
+            }
+        }
+
         List<SearxngResult> rawResults = new ArrayList<>();
         int creditsSpent = 0;
         int cacheHits = 0;
-
-        for (String query : request.queries()) {
-            String key = cacheKey(request, query);
-
-            // 1. Already cached: free.
-            String cachedJson = stringRedisTemplate.opsForValue().get(key);
-            if (cachedJson != null) {
-                rawResults.addAll(readResults(cachedJson));
-                cacheHits++;
-                continue;
-            }
-
-            // 2. Not cached, and we got the lock: we are the one caller that pays.
-            String lockKey = LOCK_PREFIX + key;
-            Boolean gotLock = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
-            if (Boolean.TRUE.equals(gotLock)) {
-                try {
-                    rawResults.addAll(paidFetch(key, query));
-                } finally {
-                    // finally, or a failed fetch parks everyone else for the full TTL.
-                    stringRedisTemplate.delete(lockKey);
-                }
+        for (Future<QueryOutcome> future : pending) {
+            QueryOutcome outcome = outcomeOf(future);
+            rawResults.addAll(outcome.results());
+            if (outcome.paid()) {
                 creditsSpent++;
-                continue;
-            }
-
-            // 3. Someone else holds the lock: wait for them to fill the cache.
-            String waitedJson = awaitCachedValue(key);
-            if (waitedJson != null) {
-                rawResults.addAll(readResults(waitedJson));
+            } else {
                 cacheHits++;
-                continue;
             }
-
-            // 4. They never did (crashed or too slow). Fail open: a duplicate fetch is
-            //    a better outcome than returning nothing for this query.
-            rawResults.addAll(paidFetch(key, query));
-            creditsSpent++;
         }
 
         // Label each result with its source tier, drop the ones below the requested
@@ -133,6 +119,51 @@ public class SearchService {
             }
         }
         return new SearchResponse(results, creditsSpent, cacheHits);
+    }
+
+    private QueryOutcome searchOne(SearchRequest request, String query) {
+        String key = cacheKey(request, query);
+
+        // 1. Already cached: free.
+        String cachedJson = stringRedisTemplate.opsForValue().get(key);
+        if (cachedJson != null) {
+            return new QueryOutcome(readResults(cachedJson), false);
+        }
+
+        // 2. Not cached, and we got the lock: we are the one caller that pays.
+        String lockKey = LOCK_PREFIX + key;
+        Boolean gotLock = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
+        if (Boolean.TRUE.equals(gotLock)) {
+            try {
+                return new QueryOutcome(paidFetch(key, query), true);
+            } finally {
+                // finally, or a failed fetch parks everyone else for the full TTL.
+                stringRedisTemplate.delete(lockKey);
+            }
+        }
+
+        // 3. Someone else holds the lock: wait for them to fill the cache.
+        String waitedJson = awaitCachedValue(key);
+        if (waitedJson != null) {
+            return new QueryOutcome(readResults(waitedJson), false);
+        }
+
+        // 4. They never did (crashed or too slow). Fail open: a duplicate fetch is
+        //    a better outcome than returning nothing for this query.
+        return new QueryOutcome(paidFetch(key, query), true);
+    }
+
+    /** A query that threw (e.g. the quota check refusing) fails the whole search, as
+     *  it did when queries ran one by one -- rethrown as itself, not wrapped. */
+    private static QueryOutcome outcomeOf(Future<QueryOutcome> future) {
+        if (future.state() == Future.State.FAILED) {
+            Throwable cause = future.exceptionNow();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            throw new IllegalStateException(cause);
+        }
+        return future.resultNow();
     }
 
     /** A real upstream search, which costs one credit. The budget is checked

@@ -108,7 +108,7 @@ public class RunController {
      */
     @GetMapping(value = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter events(@PathVariable("id") UUID id) {
-        // 15 minutes: generous against guardrails.run.maxWallClock (10 min
+        // 15 minutes: generous against guardrails.run.maxWallClock (12 min
         // default) so a slow-but-legitimate run isn't cut off by the
         // transport before the guardrail itself would have ended it.
         SseEmitter emitter = new SseEmitter(15 * 60 * 1000L);

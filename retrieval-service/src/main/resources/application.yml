@@ -23,7 +23,7 @@ guardrails:
   mode: ENFORCE   # ENFORCE | SHADOW -- SHADOW logs a breach and proceeds anyway
 
   run:
-    max-wall-clock: 10m
+    max-wall-clock: 12m
     max-searches: 40
     max-llm-calls: 35
     max-subquestions: 5
@@ -32,8 +32,8 @@ guardrails:
 
   agent:
     researcher:
-      max-wall-clock: 90s
-      max-tokens: 25000
+      max-wall-clock: 180s
+      max-tokens: 60000
       max-searches: 5
       on-breach: PARTIAL_LOW_CONFIDENCE
 
