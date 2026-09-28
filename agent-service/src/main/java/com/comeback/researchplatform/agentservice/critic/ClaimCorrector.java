@@ -75,7 +75,27 @@ public class ClaimCorrector {
         this.fixtureIO = fixtureIO;
     }
 
+    /**
+     * What {@link #decide} settled on, before anything is written. REVISED
+     * carries the rewrite; REMOVED carries the reason shown to the reader.
+     */
+    public record Decision(Kind kind, String text, String sourceUrl, Integer tier, String why) {
+        public static Decision unchanged() {
+            return new Decision(Kind.UNCHANGED, null, null, null, null);
+        }
+    }
+
+    /** decide, then apply, on the caller's thread. */
     public Outcome correct(UUID runId, ClaimRow claim, Verdict firstVerdict) {
+        return apply(runId, claim, decide(runId, claim, firstVerdict));
+    }
+
+    /**
+     * The slow part: search, fetch, index, one model call. Writes nothing to
+     * claims or sources, so CriticService can run several at once off its
+     * transaction's thread without fighting it for row locks.
+     */
+    public Decision decide(UUID runId, ClaimRow claim, Verdict firstVerdict) {
         Map<String, Integer> tierByUrl = knownTiers(runId);
         searchAgain(runId, claim, tierByUrl);
 
@@ -91,34 +111,51 @@ public class ClaimCorrector {
             }
         }
         if (passages.isEmpty()) {
-            return remove(runId, claim, "no source it read says anything about this");
+            return removed("no source it read says anything about this");
         }
 
         ClaimRevision revision = revise(runId, claim, firstVerdict, passages);
         if (revision == null || revision.action() == null) {
             say(runId, "Couldn't decide how to fix it; leaving it marked as not confirmed");
-            return new Outcome(Kind.UNCHANGED, claim);
+            return Decision.unchanged();
         }
         if (!"REVISE".equalsIgnoreCase(revision.action())) {
-            return remove(runId, claim, "none of the sources back it up");
+            return removed("none of the sources back it up");
         }
 
         if (revision.text() == null || revision.text().isBlank() || !offered.contains(revision.sourceUrl())) {
             // A rewrite pointing at a URL it was never shown is exactly the
             // fabrication this project exists to catch -- don't accept it.
             say(runId, "The rewrite didn't point at a real source; leaving it marked as not confirmed");
-            return new Outcome(Kind.UNCHANGED, claim);
+            return Decision.unchanged();
         }
+        return new Decision(Kind.REVISED, revision.text(), revision.sourceUrl(),
+                tierByUrl.get(revision.sourceUrl()), null);
+    }
 
-        UUID sourceId = jdbc.queryForObject(
-                "INSERT INTO sources (run_id, url, tier) VALUES (?, ?, ?) "
-                        + "ON CONFLICT (run_id, url) DO UPDATE SET tier = EXCLUDED.tier RETURNING id",
-                UUID.class, runId, revision.sourceUrl(), tierByUrl.get(revision.sourceUrl()));
-        jdbc.update("UPDATE claims SET original_text = text, text = ?, source_id = ?, correction = 'REVISED' "
-                + "WHERE id = ?", revision.text(), sourceId, claim.id());
-        say(runId, "Rewrote it as “" + revision.text() + "”, based on " + UrlHost.of(revision.sourceUrl()));
-        return new Outcome(Kind.REVISED,
-                new ClaimRow(claim.id(), revision.text(), claim.kind(), sourceId, revision.sourceUrl()));
+    /** The database writes for one decision. Runs on the caller's (transactional) thread. */
+    public Outcome apply(UUID runId, ClaimRow claim, Decision decision) {
+        switch (decision.kind()) {
+            case REMOVED -> {
+                jdbc.update("UPDATE claims SET correction = 'REMOVED' WHERE id = ?", claim.id());
+                say(runId, "Removed it from the answer: " + decision.why());
+                return new Outcome(Kind.REMOVED, claim);
+            }
+            case REVISED -> {
+                UUID sourceId = jdbc.queryForObject(
+                        "INSERT INTO sources (run_id, url, tier) VALUES (?, ?, ?) "
+                                + "ON CONFLICT (run_id, url) DO UPDATE SET tier = EXCLUDED.tier RETURNING id",
+                        UUID.class, runId, decision.sourceUrl(), decision.tier());
+                jdbc.update("UPDATE claims SET original_text = text, text = ?, source_id = ?, correction = 'REVISED' "
+                        + "WHERE id = ?", decision.text(), sourceId, claim.id());
+                say(runId, "Rewrote it as “" + decision.text() + "”, based on " + UrlHost.of(decision.sourceUrl()));
+                return new Outcome(Kind.REVISED,
+                        new ClaimRow(claim.id(), decision.text(), claim.kind(), sourceId, decision.sourceUrl()));
+            }
+            default -> {
+                return new Outcome(Kind.UNCHANGED, claim);
+            }
+        }
     }
 
     private Map<String, Integer> knownTiers(UUID runId) {
@@ -199,10 +236,8 @@ public class ClaimCorrector {
         }
     }
 
-    private Outcome remove(UUID runId, ClaimRow claim, String why) {
-        jdbc.update("UPDATE claims SET correction = 'REMOVED' WHERE id = ?", claim.id());
-        say(runId, "Removed it from the answer: " + why);
-        return new Outcome(Kind.REMOVED, claim);
+    private static Decision removed(String why) {
+        return new Decision(Kind.REMOVED, null, null, null, why);
     }
 
     private void say(UUID runId, String message) {

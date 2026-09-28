@@ -34,6 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * PLAN's Critic loop -- CLAUDE.md: "the Critic re-fetches sources and
@@ -138,10 +139,11 @@ public class CriticService {
                 say(runId, statements(failed.size()) + " didn't hold up. Going back to the web to fix "
                         + (failed.size() == 1 ? "it" : "them"));
             }
+            List<ClaimCorrector.Decision> decisions = decideAll(runId, failed, verdicts);
             List<ClaimRow> revised = new ArrayList<>();
-            for (ClaimRow claim : failed) {
-                say(runId, "Fixing: “" + claim.text() + "”");
-                ClaimCorrector.Outcome outcome = claimCorrector.correct(runId, claim, verdicts.get(claim.id()));
+            for (int i = 0; i < failed.size(); i++) {
+                ClaimRow claim = failed.get(i);
+                ClaimCorrector.Outcome outcome = claimCorrector.apply(runId, claim, decisions.get(i));
                 switch (outcome.kind()) {
                     case REVISED -> {
                         revised.add(outcome.claim());
@@ -294,6 +296,37 @@ public class CriticService {
                 });
             }
         }
+    }
+
+    /**
+     * Each fix is a search, a fetch and a model call, and one claim's
+     * fix doesn't depend on another's, so they run at once instead of back to
+     * back. Only decide() runs on the pool; its writes are applied afterwards on
+     * this thread, inside verify()'s transaction. A fix that dies leaves its
+     * claim UNCHANGED, same as the model failing to decide.
+     */
+    private List<ClaimCorrector.Decision> decideAll(UUID runId, List<ClaimRow> failed,
+                                                    Map<UUID, Verdict> verdicts) {
+        List<Future<ClaimCorrector.Decision>> futures = new ArrayList<>();
+        try (ExecutorService pool = Executors.newFixedThreadPool(props.parallelCalls())) {
+            for (ClaimRow claim : failed) {
+                futures.add(pool.submit(() -> {
+                    say(runId, "Fixing: “" + claim.text() + "”");
+                    return claimCorrector.decide(runId, claim, verdicts.get(claim.id()));
+                }));
+            }
+        }
+        // close() above waited for every task, so each future is finished here.
+        List<ClaimCorrector.Decision> decisions = new ArrayList<>();
+        for (Future<ClaimCorrector.Decision> future : futures) {
+            if (future.state() == Future.State.SUCCESS) {
+                decisions.add(future.resultNow());
+            } else {
+                log.warn("Fixing a claim failed in run {}", runId, future.exceptionNow());
+                decisions.add(ClaimCorrector.Decision.unchanged());
+            }
+        }
+        return decisions;
     }
 
     private void gradeBatch(UUID runId, List<ClaimRow> batch,
