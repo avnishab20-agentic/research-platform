@@ -97,7 +97,10 @@ researcher:
   token-budget: 25000
   max-search-queries: 3
   max-documents-to-extract: 5
-  passages-per-query: 4
+  # Passages (~800 chars each) the answer is written from. 4 was too little text
+  # for broad questions and every researcher answered UNANSWERABLE; 8 is still
+  # only ~6,400 chars of input per answer.
+  passages-per-query: 8
 
 writer:
   # Statements kept per sub-question -- see WriterProperties. 5 researchers x 8 = 40

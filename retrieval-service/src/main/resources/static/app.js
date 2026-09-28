@@ -581,14 +581,16 @@ function Answer({claims, final, conclusion}) {
 
   return html`<div class="fade answer">
     ${conclusion && html`<section class="concl rise">
-      <div class="eyebrow">The answer</div>
+      <div class="eyebrow">${conclusion.inconclusive ? 'The answer · inconclusive' : 'The answer'}</div>
       <p class="lead">${conclusion.answer} <${Cites} ids=${conclusion.answerClaimIds} /></p>
       ${conclusion.takeaways?.length > 0 && html`<div class="takes">
         ${conclusion.takeaways.map((t, i) => html`<div class="take" key=${i} style=${{animationDelay: `${.08 + i * .07}s`}}>
           <span class="tn">${i + 1}</span><div>${t.text} <${Cites} ids=${t.claimIds} /></div>
         </div>`)}
       </div>`}
-      <p class="hint">Written only from statements that passed the fact-check. Numbers point to the statements below.</p>
+      <p class="hint">${conclusion.inconclusive
+        ? 'Nothing passed the fact-check, so no facts are stated here.'
+        : 'Written only from statements that passed the fact-check. Numbers point to the statements below.'}</p>
     </section>`}
 
     <div class="facts">
@@ -804,8 +806,15 @@ function Ask() {
           </details>`
       : html`<${Workspace} workers=${workers} feed=${feed} running=${running} phase=${phase} />`}
 
-    ${!running && !answered && final && !err && html`<div style=${{marginTop: 16}}><${Empty} icon="◌" title="No answer this time"
-      note="The run stopped before any statements were written, usually because the research ran out of time or budget." /></div>`}
+    ${!running && !answered && final && !err && (conclusion
+      // A run with no statements still gets an answer: the inconclusive verdict and why.
+      ? html`<section class="concl rise" style=${{marginTop: 16}}>
+          <div class="eyebrow">The answer · inconclusive</div>
+          <p class="lead">${conclusion.answer}</p>
+          <p class="hint">Nothing passed the fact-check, so no facts are stated here.</p>
+        </section>`
+      : html`<div style=${{marginTop: 16}}><${Empty} icon="◌" title="No answer this time"
+          note="No statements were written: either no researcher found pages that answer the question, or the run ran out of time or budget." /></div>`)}
   </div>`;
 }
 

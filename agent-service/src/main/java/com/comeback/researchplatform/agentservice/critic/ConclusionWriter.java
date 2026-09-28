@@ -37,8 +37,10 @@ public class ConclusionWriter {
     record Draft(String answer, List<Integer> answerCites, List<DraftTakeaway> takeaways) {}
     record DraftTakeaway(String text, List<Integer> cites) {}
 
-    /** What gets stored and rendered: citations resolved to claim ids. */
-    record Conclusion(String answer, List<UUID> answerClaimIds, List<Takeaway> takeaways) {}
+    /** What gets stored and rendered: citations resolved to claim ids. inconclusive
+     *  marks an answer written in code because no statement passed the fact-check. */
+    record Conclusion(String answer, List<UUID> answerClaimIds, List<Takeaway> takeaways,
+                      boolean inconclusive) {}
     record Takeaway(String text, List<UUID> claimIds) {}
 
     private final ChatClient chatClient;
@@ -69,13 +71,32 @@ public class ConclusionWriter {
             if (conclusion == null) {
                 return;
             }
-            jdbc.update("UPDATE runs SET conclusion = ?::jsonb WHERE id = ?",
-                    objectMapper.writeValueAsString(conclusion), runId);
+            store(runId, conclusion);
             activity.record(runId, null, "CRITIC", "Wrote the conclusion from " + passed.size()
                     + " confirmed statements, with " + conclusion.takeaways().size() + " key takeaways");
         } catch (Exception e) {
             log.warn("Conclusion failed for run {}", runId, e);
         }
+    }
+
+    /**
+     * The answer for a run where nothing passed the fact-check. Written in code, not
+     * by the model: with no checked statements there is nothing a model could say
+     * that wouldn't be an unchecked claim. It tells the reader the result is
+     * inconclusive and why, instead of leaving the answer blank.
+     */
+    public void writeInconclusive(UUID runId, String why) {
+        try {
+            store(runId, new Conclusion("Inconclusive. " + why, List.of(), List.of(), true));
+            activity.record(runId, null, "CRITIC", "Nothing held up, so the answer is marked inconclusive");
+        } catch (Exception e) {
+            log.warn("Inconclusive conclusion failed for run {}", runId, e);
+        }
+    }
+
+    private void store(UUID runId, Conclusion conclusion) {
+        jdbc.update("UPDATE runs SET conclusion = ?::jsonb WHERE id = ?",
+                objectMapper.writeValueAsString(conclusion), runId);
     }
 
     private Draft draft(String question, List<ClaimRow> passed) {
@@ -91,7 +112,8 @@ public class ConclusionWriter {
                 + "statements it rests on (answerCites, cites), in those fields only -- never write "
                 + "numbers or brackets in the text itself. Cite the few statements that best support "
                 + "each point, not every related one. Keep each takeaway to one sentence. "
-                + "If statements disagree, say so.";
+                + "If statements disagree, say so. If they answer only part of the question, "
+                + "say what they do establish and say plainly what is still unanswered.";
         String user = "Question: " + question + "\n\nStatements:\n" + numbered;
         ResponseEntity<ChatResponse, Draft> result = chatClient.prompt()
                 .system(system)
@@ -121,7 +143,7 @@ public class ConclusionWriter {
         if (answerIds.isEmpty() && takeaways.isEmpty()) {
             return null;
         }
-        return new Conclusion(clean(draft.answer()), answerIds, takeaways);
+        return new Conclusion(clean(draft.answer()), answerIds, takeaways, false);
     }
 
     // The model sometimes writes "[2,3,4]" into the prose as well as the cites field;

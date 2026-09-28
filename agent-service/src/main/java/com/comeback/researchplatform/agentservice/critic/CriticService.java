@@ -94,6 +94,9 @@ public class CriticService {
         if (claims.isEmpty()) {
             // Nothing was checked, so nothing is verified -- an empty report is a failed
             // run, published as such rather than dressed up as a pass.
+            conclusionWriter.writeInconclusive(runId, "The researchers searched the web for every part of "
+                    + "this question, but none of the pages they read answered it, so there are no checked "
+                    + "facts to give. A narrower, more factual question usually finds sources.");
             jdbc.update("UPDATE runs SET status = 'UNVERIFIED', updated_at = now() WHERE id = ?", runId);
             log.info("Run {} has no claims to verify; marked UNVERIFIED", runId);
             return;
@@ -188,7 +191,13 @@ public class CriticService {
         }
         double ratio = unsupportedRatio(published);
         // Before the status flips, so the UI finds the conclusion when it loads the report.
-        conclusionWriter.write(runId, passed);
+        if (passed.isEmpty()) {
+            conclusionWriter.writeInconclusive(runId, "The research turned up " + statements(published.size())
+                    + ", but none held up when checked against the pages they came from, so there are no "
+                    + "confirmed facts to give. The statements are listed below, marked as not confirmed.");
+        } else {
+            conclusionWriter.write(runId, passed);
+        }
         // Above threshold still publishes, banner-marked, per CLAUDE.md's "a
         // failed run is published, never silently dropped".
         String status = ratio > props.unsupportedRatioThreshold() ? "UNVERIFIED" : "VERIFIED";

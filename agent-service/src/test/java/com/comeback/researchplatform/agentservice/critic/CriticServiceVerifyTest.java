@@ -183,6 +183,19 @@ class CriticServiceVerifyTest {
     }
 
     @Test
+    void whenNothingPassesTheAnswerIsInconclusive() {
+        storedClaims(List.of(contradicted, unsupported));
+        ScriptedChatModel bothFail = new ScriptedChatModel().reply("You are a fact-checker", """
+                [{"index": 1, "verdict": "CONTRADICTED"}, {"index": 2, "verdict": "UNSUPPORTED"}]
+                """);
+
+        service(bothFail, 1).verify(runId);
+
+        verify(conclusionWriter, never()).write(any(), anyList());
+        verify(conclusionWriter).writeInconclusive(eq(runId), startsWith("The research turned up 2 statements"));
+    }
+
+    @Test
     void aRunWithNoClaimsIsUnverified() {
         storedClaims(List.of());
 
@@ -190,6 +203,8 @@ class CriticServiceVerifyTest {
 
         verify(jdbc).update(startsWith("UPDATE runs SET status = 'UNVERIFIED'"), eq(runId));
         verify(conclusionWriter, never()).write(any(), anyList());
+        // Still answered: the reader is told it's inconclusive, not shown a blank page.
+        verify(conclusionWriter).writeInconclusive(eq(runId), anyString());
     }
 
     @Test
