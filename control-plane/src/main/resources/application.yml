@@ -68,7 +68,9 @@ planner:
   min-fan-out: 5
   max-fan-out: 5
   max-runs-per-day: 20
-  level-deadline: 3m
+  # Must stay above agent-service's researcher.wall-clock-budget (180s), or the
+  # sweeper releases the level while researchers are still legitimately working.
+  level-deadline: 5m
 
 server:
   port: 8083

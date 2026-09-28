@@ -3,6 +3,7 @@ package com.comeback.researchplatform.retrievalservice.search;
 import com.comeback.researchplatform.retrievalservice.config.SourceTierProperties;
 import com.comeback.researchplatform.retrievalservice.dto.SearchRequest;
 import com.comeback.researchplatform.retrievalservice.dto.SearchResponse;
+import com.comeback.researchplatform.retrievalservice.hash.Hashing;
 import com.comeback.researchplatform.retrievalservice.quota.QuotaExceededException;
 import com.comeback.researchplatform.retrievalservice.quota.QuotaService;
 import com.comeback.researchplatform.retrievalservice.tier.SourceTierResolver;
@@ -54,7 +55,8 @@ class SearchServiceTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
-        server = MockRestServiceServer.bindTo(builder).build();
+        // A search's queries run at the same time, so they can reach the server in any order.
+        server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
 
         redis = mock(StringRedisTemplate.class);
         valueOps = mock(ValueOperations.class);
@@ -107,6 +109,55 @@ class SearchServiceTest {
 
         verify(valueOps).set(anyString(), anyString(), eq(Duration.ofHours(24)));
         verify(quotaService).recordSpend();
+    }
+
+    @Test
+    void everyQueryInOneSearchIsFetchedAndResultsKeepQueryOrder() {
+        when(valueOps.get(anyString())).thenReturn(null);
+        searxngReturns("rbi", new SearxngResult("https://thehindu.com/rbi", "T", "s"));
+        searxngReturns("sebi", new SearxngResult("https://thehindu.com/sebi", "T", "s"));
+        searxngReturns("gdp", new SearxngResult("https://thehindu.com/gdp", "T", "s"));
+
+        SearchResponse response = searchService.search(
+                new SearchRequest(List.of("rbi", "sebi", "gdp"), 10, null, 4));
+
+        // The queries run at once, but results come back in the order they were asked,
+        // so the maxResults cut always keeps the first queries' results.
+        assertThat(response.results()).extracting(r -> r.url()).containsExactly(
+                "https://thehindu.com/rbi", "https://thehindu.com/sebi", "https://thehindu.com/gdp");
+        assertThat(response.creditsSpent()).isEqualTo(3);
+        assertThat(response.cacheHits()).isZero();
+        server.verify();
+        verify(quotaService, org.mockito.Mockito.times(3)).recordSpend();
+    }
+
+    @Test
+    void aSearchMixingCachedAndNewQueriesPaysOnlyForTheNewOnes() {
+        String cachedKey = "search:v2:searxng:" + Hashing.sha256Hex("rbi|").substring(0, 16);
+        when(valueOps.get(cachedKey)).thenReturn(objectMapper.writeValueAsString(
+                List.of(new SearxngResult("https://thehindu.com/rbi", "T", "s"))));
+        searxngReturns("sebi", new SearxngResult("https://thehindu.com/sebi", "T", "s"));
+
+        SearchResponse response = searchService.search(
+                new SearchRequest(List.of("rbi", "sebi"), 10, null, 4));
+
+        assertThat(response.results()).extracting(r -> r.url())
+                .containsExactly("https://thehindu.com/rbi", "https://thehindu.com/sebi");
+        assertThat(response.creditsSpent()).isEqualTo(1);
+        assertThat(response.cacheHits()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    void aQuotaBreachOnAnyQueryFailsTheWholeSearchWithTheSameError() {
+        // Queries run on their own threads; the refusal must still reach the caller as
+        // itself (the controller turns it into a 429), not wrapped in a thread error.
+        when(valueOps.get(anyString())).thenReturn(null);
+        doThrow(new QuotaExceededException(1000)).when(quotaService).checkBudget();
+
+        assertThatThrownBy(() -> searchService.search(
+                new SearchRequest(List.of("rbi", "sebi"), 10, null, 4)))
+                .isInstanceOf(QuotaExceededException.class);
     }
 
     @Test
