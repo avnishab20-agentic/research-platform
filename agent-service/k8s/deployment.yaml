@@ -6,7 +6,8 @@ metadata:
   labels:
     app.kubernetes.io/name: agent-service
 spec:
-  replicas: 1
+  # No replicas field: KEDA (keda-scaledobject.yaml) owns the pod count. A fixed number here
+  # would reset it to that number on every deploy.
   selector:
     matchLabels:
       app.kubernetes.io/name: agent-service

@@ -24,7 +24,7 @@ cluster):
 | Deployment | Manifests | Notes |
 |---|---|---|
 | `retrieval-service-cicd` | `retrieval-service/k8s/manifests/` | 1–2 copies, scaled by CPU (autoscaler) |
-| `agent-service` | `agent-service/k8s/` | runs all three agent roles |
+| `agent-service` | `agent-service/k8s/` | runs all three agent roles; 1–3 copies, scaled by KEDA on Kafka backlog |
 | `control-plane` | `control-plane/k8s/` | |
 | `extractor` | `extractor/k8s/` | |
 | `searxng` | `searxng/k8s/` | public image; its `settings.yml` is loaded from the repo |
@@ -139,6 +139,15 @@ everything.
 2. **Container Registry** `researchplatformacr` (Basic tier).
 3. **AKS cluster** `research-platform-aks`. Attach the registry above when
    creating it, so the cluster can pull images without an extra password.
+   Then turn on the **KEDA add-on**, which agent-service's autoscaler needs:
+
+   ```bash
+   az aks update -g research-platform-rg -n research-platform-aks --enable-keda
+   kubectl get crd scaledobjects.keda.sh   # should print one line
+   ```
+
+   Without it, `agent-service/k8s/keda-scaledobject.yaml` can't be applied
+   and every agent-service deploy fails.
 4. **PostgreSQL flexible server** `research-platform-pg`, version 16:
    - under **Server parameters → `azure.extensions`**, allow **`VECTOR`**
      (pgvector). The first Flyway migration runs `CREATE EXTENSION vector`
@@ -171,6 +180,24 @@ everything.
    `k8s/front-door.yaml` uses the same name.
 
 Then push to `main`, or run each workflow by hand from the **Actions** tab.
+
+## How agent-service scales (KEDA)
+
+retrieval-service scales on CPU, which suits it: it is busy while it works.
+An agent is not. It spends most of a subtask waiting on the LLM and on web
+fetches, so CPU stays low even with a queue of work behind it.
+
+So agent-service scales on **consumer lag**: how many Kafka messages are
+waiting that no agent has read yet. KEDA checks every 15 seconds and adds a
+pod for every 2 waiting subtasks on `research.subtasks`, or every 1 waiting
+job on `run.ready` or `claims.ready`, between 1 and 3 pods. It removes pods
+one at a time after 5 quiet minutes, because each removal makes Kafka
+reshuffle partitions between the remaining pods.
+
+It never goes to 0: a new pod takes up to 3 minutes to start. The cap of 3 is
+what fits in the 4-vCPU cluster.
+
+To watch it: `kubectl get scaledobject,hpa -n namespace-workflow-1790106905740`.
 
 ## Keeping costs down
 

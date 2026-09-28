@@ -1,0 +1,105 @@
+# Scales agent-service on Kafka consumer lag: the number of messages waiting on its topics
+# that no agent has picked up yet. CPU is the wrong signal here -- an agent spends most of a
+# subtask waiting on the LLM and on web fetches, so a pod can be idle on CPU while 12
+# sub-questions queue up behind it.
+#
+# Needs the AKS KEDA add-on, which installs the ScaledObject type. Without it this file fails
+# to apply and the whole agent-service deploy stops. See docs/DEPLOYMENT.md.
+#
+# KEDA creates and owns an HPA for agent-service from this file; do not add a second HPA.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: agent-service
+  namespace: namespace-workflow-1790106905740
+spec:
+  scaleTargetRef:
+    name: agent-service
+  # Never 0: a new pod needs up to 3 minutes to start (JVM plus the embedding model), so
+  # scaling from zero would stall the first run of the day for that long.
+  minReplicaCount: 1
+  # The cluster has 4 vCPUs shared by every service. Each agent pod asks for 0.25 CPU and
+  # 768Mi, so 3 fits beside everything else. Raise it only after the node pool grows.
+  maxReplicaCount: 3
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          # Removing a pod makes Kafka hand its partitions to the others (a rebalance), and a
+          # pod mid-subtask loses that work. Wait 5 quiet minutes, then remove one pod at a time.
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  # One trigger per agent role. KEDA scales to whichever needs the most pods.
+  triggers:
+    # The fan-out: up to 12 sub-questions land here at once, 5-90s each.
+    - type: kafka
+      metadata:
+        bootstrapServers: research-platform-eventhubs.servicebus.windows.net:9093
+        sasl: plaintext
+        tls: enable
+        topic: research.subtasks
+        consumerGroup: agent-service-researcher
+        # One extra pod per 2 waiting subtasks. Each pod handles one at a time
+        # (max-poll-records: 1), so a higher number would leave work queued for minutes.
+        lagThreshold: "2"
+        # Same as the app's auto-offset-reset, so KEDA counts lag the way the consumer reads.
+        offsetResetPolicy: earliest
+      authenticationRef:
+        name: eventhubs-kafka-auth
+    # One message per run: a writer or critic job takes a minute or more of LLM calls.
+    - type: kafka
+      metadata:
+        bootstrapServers: research-platform-eventhubs.servicebus.windows.net:9093
+        sasl: plaintext
+        tls: enable
+        topic: run.ready
+        consumerGroup: agent-service-writer
+        lagThreshold: "1"
+        offsetResetPolicy: earliest
+      authenticationRef:
+        name: eventhubs-kafka-auth
+    - type: kafka
+      metadata:
+        bootstrapServers: research-platform-eventhubs.servicebus.windows.net:9093
+        sasl: plaintext
+        tls: enable
+        topic: claims.ready
+        consumerGroup: agent-service-critic
+        lagThreshold: "1"
+        offsetResetPolicy: earliest
+      authenticationRef:
+        name: eventhubs-kafka-auth
+---
+# How KEDA logs in to Event Hubs' Kafka endpoint: the same login the app uses
+# (username "$ConnectionString", password = the connection string). SASL PLAIN and TLS
+# are set on each trigger above.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: eventhubs-kafka-auth
+  namespace: namespace-workflow-1790106905740
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: keda-eventhubs-login
+      key: username
+    # The only real secret: read from the hand-made app-secrets, never committed.
+    - parameter: password
+      name: app-secrets
+      key: EVENTHUBS_CONNECTION_STRING
+---
+# KEDA reads the username only from a Secret. The value isn't sensitive: "$ConnectionString" is
+# the literal username Event Hubs expects from every Kafka client.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keda-eventhubs-login
+  namespace: namespace-workflow-1790106905740
+type: Opaque
+stringData:
+  username: $ConnectionString
